@@ -1,1 +1,18 @@
-/build
+Android Studio & Gradle
+
+.gradle/
+.idea/
+build/
+app/build/
+local.properties
+*.iml
+
+OS specifikt
+
+.DS_Store
+Thumbs.db
+
+Känsliga filer (om du skapar dem senare)
+
+key.properties
+secring.gpg
