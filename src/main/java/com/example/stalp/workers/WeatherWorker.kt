@@ -1,91 +1,49 @@
-package com.example.stalp.widget
+package com.example.stalp.workers
 
-import android.appwidget.AppWidgetManager
-import android.content.Intent
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.state.PreferencesGlanceStateDefinition
-import androidx.glance.appwidget.state.updateAppWidgetState
-import androidx.datastore.preferences.core.Preferences
-import kotlinx.coroutines.launch
+import android.content.Context
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+import com.example.stalp.data.WeatherRepository
+import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
-class LinearClockConfigActivity : ComponentActivity() {
-    @OptIn(ExperimentalMaterial3Api::class)
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+class WeatherWorker(
+    context: Context,
+    params: WorkerParameters
+) : CoroutineWorker(context, params) {
 
-        val appWidgetId = intent?.getIntExtra(
-            AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID
-        ) ?: AppWidgetManager.INVALID_APPWIDGET_ID
+    override suspend fun doWork(): Result {
+        return try {
+            // Simulera hämtning av väder
+            val temp = Random.nextInt(-10, 35)
+            val precip = Random.nextInt(0, 100)
 
-        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-            finish(); return
+            val repository = WeatherRepository(applicationContext)
+            repository.saveWeatherData(temp, precip)
+
+            Result.success()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Result.retry()
         }
+    }
 
-        setContent {
-            MaterialTheme {
-                val scope = rememberCoroutineScope()
+    companion object {
+        private const val WORK_NAME = "weather_worker"
 
-                var font by remember { mutableStateOf(LinearClockPrefs.DEF_FONT) }
-                var scale by remember { mutableStateOf(LinearClockPrefs.DEF_SCALE) }
-                var bg by remember { mutableStateOf(LinearClockPrefs.DEF_BG) }
-                var text by remember { mutableStateOf(LinearClockPrefs.DEF_TEXT) }
-                var accent by remember { mutableStateOf(LinearClockPrefs.DEF_ACCENT) }
-                var hoursToShow by remember { mutableStateOf(LinearClockPrefs.DEF_HOURS_TO_SHOW) }
+        fun schedule(context: Context) {
+            val workRequest = PeriodicWorkRequestBuilder<WeatherWorker>(
+                1, TimeUnit.HOURS // Uppdatera varje timme
+            ).build()
 
-                Surface(Modifier.fillMaxSize()) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text("Widget-inställningar", style = MaterialTheme.typography.titleLarge)
-                        Spacer(Modifier.height(16.dp))
-
-                        Text("Färger")
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(0xFFFFFFFF.toInt(), 0xFF111827.toInt()).forEach { c ->
-                                Box(Modifier.size(40.dp).background(androidx.compose.ui.graphics.Color(c)).clickable { bg = c })
-                            }
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    val ctx = this@LinearClockConfigActivity
-                                    val manager = GlanceAppWidgetManager(ctx)
-                                    val glanceId = manager.getGlanceIds(LinearClockWidget::class.java).firstOrNull()
-
-                                    if (glanceId != null) {
-                                        // Vi specificerar typen <Preferences> explicit för att hjälpa kompilatorn
-                                        updateAppWidgetState<Preferences>(ctx, PreferencesGlanceStateDefinition, glanceId) { prefs ->
-                                            prefs[LinearClockPrefs.FONT_FAMILY] = font
-                                            prefs[LinearClockPrefs.FONT_SCALE] = scale
-                                            prefs[LinearClockPrefs.COLOR_BG] = bg
-                                            prefs[LinearClockPrefs.COLOR_TEXT] = text
-                                            prefs[LinearClockPrefs.COLOR_ACCENT] = accent
-                                            prefs[LinearClockPrefs.HOURS_TO_SHOW] = hoursToShow
-                                        }
-                                        LinearClockWidget.update(ctx, glanceId)
-                                    }
-
-                                    val result = Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                                    setResult(RESULT_OK, result)
-                                    finish()
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Spara & Slutför") }
-                    }
-                }
-            }
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                WORK_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                workRequest
+            )
         }
     }
 }

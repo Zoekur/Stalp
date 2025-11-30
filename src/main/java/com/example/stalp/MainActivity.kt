@@ -83,7 +83,7 @@ fun LinearClockScreen() {
     // Samlar in väderdata från DataStore i realtid
     val weatherData by weatherRepository.weatherDataFlow.collectAsState(initial = WeatherData())
 
-    val now by rememberTicker1s()
+    val now by rememberTicker1m()
     val timeLabel = now.format(DateTimeFormatter.ofPattern("HH:mm"))
     val mins = now.hour * 60 + now.minute
     val pct = mins / (24f * 60f)
@@ -259,11 +259,11 @@ fun LinearDayCard(
                 cornerRadius = CornerRadius(24f, 24f)
             )
 
-            // Timetiketter 1–24
-            for (h in 1..24) {
+            // Timetiketter 0–24
+            for (h in 0..24) {
                 val x = pad + trackWidth * (h / 24f)
                 val label =
-                    if (h == 24) "24" else h.toString() // Ändrat till "24" istället för "24/00"
+                    if (h == 24) "24" else if (h == 0) "00" else h.toString()
                 drawContext.canvas.nativeCanvas.apply {
                     val paint = Paint().apply {
                         color = android.graphics.Color.BLACK
@@ -505,12 +505,16 @@ private fun fractionOfDay(t: LocalTime): Float {
 
 // -------- ENKEL TICKER --------
 @Composable
-fun rememberTicker1s(): State<LocalDateTime> {
+fun rememberTicker1m(): State<LocalDateTime> {
     val state = remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
-            // Använder 60 sekunder delay för att minska batterianvändningen
-            delay(60000)
+            val now = LocalDateTime.now()
+            // Väntar till nästa minutbyte för att hålla klockan synkad
+            val nextMinute = now.plusMinutes(1).withSecond(0).withNano(0)
+            val delayMs = java.time.temporal.ChronoUnit.MILLIS.between(now, nextMinute)
+
+            delay(delayMs + 50) // Liten buffert för att vara säker på att vi passerat minuten
             state.value = LocalDateTime.now()
         }
     }
