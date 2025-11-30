@@ -7,15 +7,37 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.datastore.preferences.core.Preferences
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.PreferencesGlanceStateDefinition
 import androidx.glance.appwidget.state.updateAppWidgetState
-import androidx.datastore.preferences.core.Preferences
+import com.example.stalp.ui.settings.ThemePreferences
+import com.example.stalp.ui.theme.StalpTheme
+import com.example.stalp.ui.theme.ThemeOption
+import com.example.stalp.ui.theme.ThemeSelector
 import kotlinx.coroutines.launch
 
 class LinearClockConfigActivity : ComponentActivity() {
@@ -32,9 +54,11 @@ class LinearClockConfigActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme {
-                val scope = rememberCoroutineScope()
+            val themeOption by ThemePreferences.themeOptionFlow(applicationContext)
+                .collectAsState(initial = ThemeOption.NordicCalm)
+            val scope = rememberCoroutineScope()
 
+            StalpTheme(themeOption = themeOption, dynamicColorEnabled = false) {
                 var font by remember { mutableStateOf(LinearClockPrefs.DEF_FONT) }
                 var scale by remember { mutableStateOf(LinearClockPrefs.DEF_SCALE) }
                 var bg by remember { mutableStateOf(LinearClockPrefs.DEF_BG) }
@@ -44,13 +68,27 @@ class LinearClockConfigActivity : ComponentActivity() {
 
                 Surface(Modifier.fillMaxSize()) {
                     Column(Modifier.padding(16.dp)) {
+                        ThemeSelector(
+                            selectedOption = themeOption,
+                            onOptionSelected = { option ->
+                                scope.launch { ThemePreferences.setThemeOption(applicationContext, option) }
+                            },
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+
                         Text("Widget-inställningar", style = MaterialTheme.typography.titleLarge)
                         Spacer(Modifier.height(16.dp))
 
                         Text("Färger")
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(0xFFFFFFFF.toInt(), 0xFF111827.toInt()).forEach { c ->
-                                Box(Modifier.size(40.dp).background(androidx.compose.ui.graphics.Color(c)).clickable { bg = c })
+                                Box(
+                                    Modifier
+                                        .size(40.dp)
+                                        .background(androidx.compose.ui.graphics.Color(c))
+                                        .clickable { bg = c }
+                                )
                             }
                         }
 
