@@ -1,7 +1,7 @@
-// Toppnivå build file
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
-    // Standard Android plugin
     alias(libs.plugins.android.application) apply false
-    // Standard Kotlin plugin
     alias(libs.plugins.kotlin.android) apply false
+    // This alias now correctly points to the compose compiler plugin
+    alias(libs.plugins.kotlin.compose) apply false
 }
