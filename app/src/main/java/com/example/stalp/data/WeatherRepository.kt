@@ -6,18 +6,6 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.map
 import java.io.IOException
-import androidx.compose.ui.graphics.Color // Behövs för DayEvent
-import java.time.LocalTime // Behövs för DayEvent
-
-// -------- DATAKLASS FÖR TIDSLINJE-EVENT --------
-data class DayEvent(
-    val id: String,
-    val title: String,
-    val start: LocalTime,
-    val end: LocalTime? = null,
-    val icon: String? = null,
-    val color: Color = Color(0xFF6AA6FF)
-)
 
 // --- DataStore Setup ---
 // Skapar en singleton DataStore för att lagra väderdata för huvudappen
