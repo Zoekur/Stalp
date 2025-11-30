@@ -30,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -48,9 +49,13 @@ import androidx.compose.ui.unit.sp
 import com.example.stalp.data.DayEvent
 import com.example.stalp.data.WeatherData
 import com.example.stalp.data.WeatherRepository
+import com.example.stalp.ui.settings.ThemePreferences
+import com.example.stalp.ui.theme.ThemeOption
+import com.example.stalp.ui.theme.ThemeSelector
 import com.example.stalp.ui.theme.StalpTheme
 import com.example.stalp.workers.WeatherWorker
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -64,10 +69,21 @@ class MainActivity : ComponentActivity() {
         // Schemalägger väder-workern att starta så snart appen öppnas
         WeatherWorker.schedule(applicationContext)
 
+        val appContext = applicationContext
+
         setContent {
-            StalpTheme { // Återställt tema
+            val themeOption by ThemePreferences.themeOptionFlow(appContext)
+                .collectAsState(initial = ThemeOption.NordicCalm)
+            val scope = rememberCoroutineScope()
+
+            StalpTheme(themeOption = themeOption) { // Återställt tema
                 Surface(Modifier.fillMaxSize()) {
-                    LinearClockScreen()
+                    LinearClockScreen(
+                        themeOption = themeOption,
+                        onThemeOptionChange = { option ->
+                            scope.launch { ThemePreferences.setThemeOption(appContext, option) }
+                        }
+                    )
                 }
             }
         }
@@ -76,7 +92,10 @@ class MainActivity : ComponentActivity() {
 
 // -------- SKÄRM (Kombinerar tidslinje & kort) --------
 @Composable
-fun LinearClockScreen() {
+fun LinearClockScreen(
+    themeOption: ThemeOption,
+    onThemeOptionChange: (ThemeOption) -> Unit,
+) {
     val context = LocalContext.current
     val weatherRepository = remember { WeatherRepository(context) }
 
@@ -144,6 +163,13 @@ fun LinearClockScreen() {
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        ThemeSelector(
+            selectedOption = themeOption,
+            onOptionSelected = onThemeOptionChange,
+        )
+
+        Spacer(Modifier.height(12.dp))
+
         // Huvudklocka
         Text(
             text = timeLabel,
