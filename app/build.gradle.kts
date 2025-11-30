@@ -41,11 +41,11 @@ android {
         compose = true
         buildConfig = true
     }
-   // composeOptions {
+    composeOptions {
         // Detta är nyckeln. Vi sätter versionen manuellt här.
         // Version 1.5.11 matchar Kotlin 1.9.23
-     //   kotlinCompilerExtensionVersion = "1.5.11"
-   // }
+        kotlinCompilerExtensionVersion = "1.5.11"
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

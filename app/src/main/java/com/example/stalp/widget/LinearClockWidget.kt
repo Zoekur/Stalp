@@ -2,6 +2,8 @@ package com.example.stalp.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.Preferences
 import androidx.glance.GlanceId
@@ -9,7 +11,6 @@ import androidx.glance.GlanceModifier
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.PreferencesGlanceStateDefinition
@@ -31,163 +32,250 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-// Dessa två är kritiska för TextUnit-felet:
 import androidx.glance.unit.TextUnit
 import androidx.glance.unit.TextUnitType
+import com.example.stalp.data.CalendarRepository
+import com.example.stalp.data.WeatherRepository
+import com.example.stalp.data.DayEvent
+import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 
 object LinearClockWidget : GlanceAppWidget() {
 
     override val stateDefinition = PreferencesGlanceStateDefinition
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        // Fetch repositories
+        val weatherRepo = WeatherRepository(context)
+        val calendarRepo = CalendarRepository(context)
+
         provideContent {
-            LinearClockWidgetContent()
+            val weatherData by weatherRepo.weatherDataFlow.collectAsState(initial = null)
+            // Ideally we should observe calendar data too, but for now we fetch it once or assume it's stable during composition
+            // In a real app we might want to reload it periodically or on change
+            val events = calendarRepo.getEventsForToday()
+
+            LinearClockWidgetContent(weatherData, events)
         }
     }
 }
 
 @Composable
-private fun LinearClockWidgetContent() {
+private fun LinearClockWidgetContent(
+    weatherData: com.example.stalp.data.WeatherData?,
+    events: List<DayEvent>
+) {
     val prefs = currentState<Preferences>()
-    val fontKey = prefs[LinearClockPrefs.FONT_FAMILY] ?: LinearClockPrefs.DEF_FONT
-    val scale   = (prefs[LinearClockPrefs.FONT_SCALE] ?: LinearClockPrefs.DEF_SCALE).coerceIn(0.7f, 1.6f)
-    val colorBg = prefs[LinearClockPrefs.COLOR_BG] ?: LinearClockPrefs.DEF_BG
-    val colorText = prefs[LinearClockPrefs.COLOR_TEXT] ?: LinearClockPrefs.DEF_TEXT
-    val colorAccent = prefs[LinearClockPrefs.COLOR_ACCENT] ?: LinearClockPrefs.DEF_ACCENT
-    val totalHoursToShow = prefs[LinearClockPrefs.HOURS_TO_SHOW] ?: LinearClockPrefs.DEF_HOURS_TO_SHOW
-
-    val hoursBeforeNow = totalHoursToShow / 2 - 1
-    val hoursAfterNow = totalHoursToShow - hoursBeforeNow - 1
+    // Defaults matching the user's description and existing preferences
+    val scale = (prefs[LinearClockPrefs.FONT_SCALE] ?: LinearClockPrefs.DEF_SCALE).coerceIn(0.7f, 1.6f)
+    // The visualization shows a green progress bar (passed time) and white future time.
+    // We can use defaults or preferences for colors, but let's try to match the image.
+    val colorPassed = ColorProvider(0xFF86E3B3.toInt()) // Light green
+    val colorFuture = ColorProvider(0xFFFFFFFF.toInt()) // White
+    val colorRedLine = ColorProvider(0xFFEF4444.toInt()) // Red
+    val colorBorder = ColorProvider(0xFF000000.toInt()) // Black border
 
     val cal = java.util.Calendar.getInstance()
     val nowHour = cal.get(java.util.Calendar.HOUR_OF_DAY)
     val nowMin = cal.get(java.util.Calendar.MINUTE)
-    val nowFrac = nowMin / 60f
 
-    val hours = ((-hoursBeforeNow)..hoursAfterNow).map { wrap24(nowHour + it) }
-    val redLineFraction = (hoursBeforeNow.toFloat() + nowFrac) / totalHoursToShow.toFloat()
-    val currentHourIndex = hoursBeforeNow
+    // Total hours to show: 24h as per visualization (1 2 ... 23 00)
+    // The visualization shows a full day linear clock.
+    val startHour = 1 // or 0? Visualization starts at 1.
+    val hoursList = (1..23).toList() + 0
 
-    val fam = when (fontKey) {
-        "sans" -> FontFamily.SansSerif
-        "serif" -> FontFamily.Serif
-        "mono" -> FontFamily.Monospace
-        else -> FontFamily.Default
-    }
+    // We need to calculate the fraction of the day that has passed.
+    val minutesPassedToday = nowHour * 60 + nowMin
+    val totalMinutesInDay = 24 * 60
+    val progressFraction = minutesPassedToday.toFloat() / totalMinutesInDay.toFloat()
 
     Column(
         GlanceModifier
             .fillMaxSize()
-            .background(ColorProvider(colorBg))
-            .padding(12.dp)
-            .cornerRadius(16.dp)
+            .background(ColorProvider(0xFFFFFFFF.toInt())) // Background for the whole widget
+            .padding(8.dp)
             .clickable(actionStartActivity<LinearClockConfigActivity>())
     ) {
-        // Tidslinje Container
-        Box(GlanceModifier.fillMaxWidth().defaultWeight()) {
 
-            Row(GlanceModifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                hours.forEachIndexed { idx, h ->
-                    Column(GlanceModifier.defaultWeight().padding(horizontal = 2.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally) {
+        // 1. TOP SECTION: Linear Clock (Green progress bar + Calendar Events)
+        // Visualization shows a bordered box
+        Box(
+            GlanceModifier
+                .fillMaxWidth()
+                .height(80.dp) // Adjust height as needed
+                .background(colorBorder)
+                .padding(2.dp) // Border thickness
+        ) {
+            // Inner container with actual content
+             Box(
+                GlanceModifier
+                    .fillMaxSize()
+                    .background(colorFuture)
+            ) {
+                 // 1.1 Green Progress Bar (Passed time)
+                 Row(GlanceModifier.fillMaxSize()) {
+                     if (progressFraction > 0f) {
+                         Box(
+                             GlanceModifier
+                                 .fillMaxHeight()
+                                 .defaultWeight(progressFraction)
+                                 .background(colorPassed)
+                         ) {}
+                     }
+                     if (progressFraction < 1f) {
+                         Spacer(GlanceModifier.defaultWeight(1f - progressFraction))
+                     }
+                 }
 
-                        Text(
-                            text = h.toString().padStart(2, '0'),
-                            style = TextStyle(
-                                color = ColorProvider(colorText),
-                                fontFamily = fam,
-                                fontWeight = if (idx == currentHourIndex) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = TextUnit(14f * scale, TextUnitType.Sp),
-                            ),
-                        )
-                        Spacer(GlanceModifier.height((4 * scale).dp))
+                 // 1.2 Calendar Events
+                 // We overlay them. Since we are in a Box, we can stack.
+                 // But we need to position them horizontally based on time.
+                 // Events are absolute time (00:00 - 23:59).
+                 // We need to map start/end time to horizontal fraction.
+                 // Since Glance doesn't support absolute positioning well (like offset),
+                 // we might need to use a Row with Spacers/Weights for each event, but that's hard if they overlap.
+                 // Simplified approach: Render non-overlapping events or just one layer of events.
+                 // Or use a custom drawing (Canvas) which Glance doesn't support directly for widgets (it uses RemoteViews).
+                 // We can simulate absolute positioning with a Row and weights if we handle one event at a time or non-overlapping.
+                 // For now, let's just try to render them on top if possible, or maybe just render markers.
+                 // The visualization shows a purple block.
 
-                        HourBlock(
-                            progress = if (idx == currentHourIndex) nowFrac else null,
-                            bg = 0xFFE5E7EB.toInt(),
-                            accent = colorAccent
-                        )
+                 // Let's try to render events using a Row that spans the whole day.
+                 // But since we can't easily overlay multiple varying-width boxes at exact positions without a complex weight calculation,
+                 // we might check if we can render them inside the same Row structure or a separate Box overlay.
+                 // Box overlay works.
+
+                 events.forEach { event ->
+                     val startMin = event.start.hour * 60 + event.start.minute
+                     // Handle end time wrapping or clamping
+                     val endMin = if (event.end != null) event.end.hour * 60 + event.end.minute else startMin + 60
+                     val safeEndMin = if (endMin < startMin) 24*60 else endMin // Handle overflow?
+
+                     val startFrac = startMin.toFloat() / totalMinutesInDay
+                     val durationFrac = (safeEndMin - startMin).toFloat() / totalMinutesInDay
+
+                     if (durationFrac > 0) {
+                         Row(GlanceModifier.fillMaxSize()) {
+                             if (startFrac > 0) Spacer(GlanceModifier.defaultWeight(startFrac))
+                             Box(
+                                 GlanceModifier
+                                     .fillMaxHeight()
+                                     .defaultWeight(durationFrac)
+                                     .background(ColorProvider(event.color)) // Purple in visual, but we use event color
+                                     .run {
+                                         // Make it semi-transparent or hatched? Glance doesn't support alpha easily on background color unless color has alpha.
+                                         // Let's assume event.color has alpha or is solid.
+                                         this
+                                     }
+                             ) { }
+                             if (startFrac + durationFrac < 1f) Spacer(GlanceModifier.defaultWeight(1f - (startFrac + durationFrac)))
+                         }
+                     }
+                 }
+
+                 // 1.3 Hour Numbers
+                 // These should be overlayed on top of bars.
+                 Row(
+                     GlanceModifier.fillMaxSize(),
+                     verticalAlignment = Alignment.CenterVertically
+                 ) {
+                     hoursList.forEach { h ->
+                         Box(
+                             GlanceModifier.defaultWeight(1f),
+                             contentAlignment = Alignment.Center
+                         ) {
+                             Text(
+                                 text = h.toString(),
+                                 style = TextStyle(
+                                     fontSize = TextUnit(12.dp.value, TextUnitType.Sp), // Approximate
+                                     fontWeight = FontWeight.Bold
+                                 )
+                             )
+                         }
+                     }
+                 }
+
+                 // 1.4 Red Line (Current Time)
+                 Row(GlanceModifier.fillMaxSize()) {
+                     if (progressFraction > 0f) Spacer(GlanceModifier.defaultWeight(progressFraction))
+                     Box(
+                         GlanceModifier
+                             .width(2.dp)
+                             .fillMaxHeight()
+                             .background(colorRedLine)
+                     ) {}
+                     if (progressFraction < 1f) Spacer(GlanceModifier.defaultWeight(1f - progressFraction))
+                 }
+            }
+        }
+
+        Spacer(GlanceModifier.height(8.dp))
+
+        // 2. BOTTOM SECTION: Two Boxes (Weather & Clothing)
+        Row(GlanceModifier.fillMaxWidth().height(120.dp)) { // Fixed height for bottom section
+
+            // 2.1 Weather Info Box
+            Box(
+                GlanceModifier
+                    .defaultWeight(1f)
+                    .fillMaxHeight()
+                    .background(ColorProvider(0xFFFFFFFF.toInt()))
+                    .cornerRadius(16.dp)
+                    // Border simulation (Box inside Box with padding)
+                    .padding(2.dp)
+                    .background(colorBorder) // Border color
+            ) {
+                 Box(
+                    GlanceModifier
+                        .fillMaxSize()
+                        .padding(2.dp) // Border width
+                        .background(ColorProvider(0xFFFFFFFF.toInt())) // Inner background
+                        .padding(8.dp)
+                ) {
+                    if (weatherData != null && weatherData.isDataLoaded) {
+                         Text(
+                             text = "Temp: ${weatherData.temperatureCelsius}°C\n" +
+                                    "Nederbörd: ${weatherData.precipitationChance}%\n\n" +
+                                    weatherData.adviceText,
+                             style = TextStyle(fontSize = TextUnit(12.dp.value, TextUnitType.Sp))
+                         )
+                    } else {
+                        Text("Laddar väder...")
                     }
                 }
             }
 
-            // Röda bandet
-            Row(GlanceModifier.fillMaxWidth().fillMaxHeight()) {
-                if (redLineFraction > 0f) {
-                    Spacer(GlanceModifier.defaultWeight(redLineFraction))
-                }
-                Box(
+            Spacer(GlanceModifier.width(8.dp))
+
+            // 2.2 Clothing Advice Box
+            Box(
+                GlanceModifier
+                    .defaultWeight(1f)
+                    .fillMaxHeight()
+                    .background(ColorProvider(0xFFFFFFFF.toInt()))
+                    .cornerRadius(16.dp)
+                    .padding(2.dp)
+                    .background(colorBorder)
+            ) {
+                 Box(
                     GlanceModifier
-                        .width(2.dp)
-                        .fillMaxHeight()
-                        .background(ColorProvider(0xFFEF4444.toInt()))
-                ) {}
-                if (redLineFraction < 1f) {
-                    Spacer(GlanceModifier.defaultWeight(1f - redLineFraction))
-                }
-            }
-        }
-
-        Spacer(GlanceModifier.height((8 * scale).dp))
-
-        // Nedre raden
-        Row(GlanceModifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.End, // Förenklad alignment
-            verticalAlignment = Alignment.CenterVertically) {
-
-            Text(
-                text = "%02d:%02d".format(nowHour, nowMin),
-                style = TextStyle(
-                    color = ColorProvider(colorText),
-                    fontFamily = fam,
-                    fontSize = TextUnit(18f * scale, TextUnitType.Sp)
-                ),
-                modifier = GlanceModifier.padding(end = 16.dp)
-            )
-            Text(
-                text = "⚙️",
-                style = TextStyle(
-                    color = ColorProvider(colorText),
-                    fontFamily = fam,
-                    fontSize = TextUnit(18f * scale, TextUnitType.Sp)
-                ),
-                modifier = GlanceModifier.clickable(
-                    actionStartActivity<LinearClockConfigActivity>()
-                )
-            )
-        }
-    }
-}
-
-@Composable
-private fun HourBlock(progress: Float?, bg: Int, accent: Int) {
-    Box(
-        GlanceModifier
-            .fillMaxWidth()
-            .height(18.dp)
-            .background(ColorProvider(bg))
-            .cornerRadius(4.dp)
-    ) {
-        if (progress != null) {
-            val pct = progress.coerceIn(0f, 1f)
-            Row(GlanceModifier.fillMaxSize()) {
-                if (pct > 0f) {
-                    Box(
-                        GlanceModifier
-                            .fillMaxHeight()
-                            .defaultWeight(pct)
-                            .background(ColorProvider(accent))
-                            .cornerRadius(4.dp)
-                    ) {}
-                }
-                if (pct < 1f) {
-                    Spacer(GlanceModifier.defaultWeight(1f - pct))
+                        .fillMaxSize()
+                        .padding(2.dp)
+                        .background(ColorProvider(0xFFFFFFFF.toInt()))
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (weatherData != null && weatherData.isDataLoaded) {
+                        // Display the icon/emoji large
+                        Text(
+                            text = weatherData.adviceIcon,
+                            style = TextStyle(fontSize = TextUnit(40.dp.value, TextUnitType.Sp))
+                        )
+                    } else {
+                         Text("?")
+                    }
                 }
             }
         }
     }
-}
-
-private fun wrap24(hour: Int): Int {
-    return (hour % 24 + 24) % 24
 }
