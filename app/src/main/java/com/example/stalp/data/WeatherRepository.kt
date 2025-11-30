@@ -17,6 +17,7 @@ object WeatherPreferencesKeys {
     val PRECIP_CHANCE = intPreferencesKey("precip_chance_pct")
     val IS_COLD_ADVICE = stringPreferencesKey("advice_icon") // Sparar ikonen
     val ADVICE_TEXT = stringPreferencesKey("advice_text") // Sparar rådtexten
+    val CLOTHING_TYPE = stringPreferencesKey("clothing_type") // Sparar typ av kläder som sträng
     val DATA_LOADED = booleanPreferencesKey("data_loaded")
 }
 
@@ -26,8 +27,19 @@ data class WeatherData(
     val precipitationChance: Int = 0, // i procent (0-100)
     val adviceIcon: String = "☁️",
     val adviceText: String = "Laddar väderdata...",
+    val clothingType: String = "NORMAL",
     val isDataLoaded: Boolean = false
-)
+) {
+    fun getClothingResourceId(): Int {
+        return when (clothingType) {
+            "COLD" -> com.example.stalp.R.drawable.ic_clothing_cold
+            "HOT" -> com.example.stalp.R.drawable.ic_clothing_hot
+            "RAIN" -> com.example.stalp.R.drawable.ic_clothing_rain
+            "NORMAL" -> com.example.stalp.R.drawable.ic_clothing_normal
+            else -> com.example.stalp.R.drawable.ic_clothing_normal
+        }
+    }
+}
 
 // Konstanter för klädrådslogik (enligt din skiss)
 object ClothingAdvice {
@@ -51,45 +63,51 @@ class WeatherRepository(private val context: Context) {
                 precipitationChance = prefs[WeatherPreferencesKeys.PRECIP_CHANCE] ?: 0,
                 adviceIcon = prefs[WeatherPreferencesKeys.IS_COLD_ADVICE] ?: "☁️",
                 adviceText = prefs[WeatherPreferencesKeys.ADVICE_TEXT] ?: "Väntar på data...",
+                clothingType = prefs[WeatherPreferencesKeys.CLOTHING_TYPE] ?: "NORMAL",
                 isDataLoaded = prefs[WeatherPreferencesKeys.DATA_LOADED] ?: false
             )
         }
 
     // Skriver ny väderdata till DataStore
     suspend fun saveWeatherData(temp: Int, precipChance: Int) {
-        val (adviceText, adviceIcon) = generateClothingAdvice(temp, precipChance)
+        val (adviceText, adviceIcon, clothingType) = generateClothingAdvice(temp, precipChance)
 
         dataStore.edit { prefs ->
             prefs[WeatherPreferencesKeys.TEMP_CELSIUS] = temp
             prefs[WeatherPreferencesKeys.PRECIP_CHANCE] = precipChance
             prefs[WeatherPreferencesKeys.ADVICE_TEXT] = adviceText
             prefs[WeatherPreferencesKeys.IS_COLD_ADVICE] = adviceIcon
+            prefs[WeatherPreferencesKeys.CLOTHING_TYPE] = clothingType
             prefs[WeatherPreferencesKeys.DATA_LOADED] = true
         }
     }
 
     // Kärnlogiken för klädråd
-    private fun generateClothingAdvice(temp: Int, precipChance: Int): Pair<String, String> {
+    private fun generateClothingAdvice(temp: Int, precipChance: Int): Triple<String, String, String> {
         return when {
             // Varma kläder: -5 grader eller lägre (enligt skissen)
-            temp <= ClothingAdvice.COLD_THRESHOLD_C -> Pair(
+            temp <= ClothingAdvice.COLD_THRESHOLD_C -> Triple(
                 "Rekommenderar varma kläder: Jacka, mössa, handskar.",
-                "🧥🧣🧤"
+                "🧥🧣🧤",
+                "COLD"
             )
             // Lätta kläder: +30 grader eller högre (enligt skissen)
-            temp > ClothingAdvice.HOT_THRESHOLD_C -> Pair(
+            temp > ClothingAdvice.HOT_THRESHOLD_C -> Triple(
                 "Välj lätta kläder: Shorts och linne.",
-                "🩳👕☀️"
+                "🩳👕☀️",
+                "HOT"
             )
             // Regn
-            precipChance >= ClothingAdvice.PRECIPITATION_THRESHOLD_PCT -> Pair(
+            precipChance >= ClothingAdvice.PRECIPITATION_THRESHOLD_PCT -> Triple(
                 "Hög risk för nederbörd (${precipChance}%). Ta med paraply eller regnjacka!",
-                "☔️🌧️"
+                "☔️🌧️",
+                "RAIN"
             )
             // Normalt
-            else -> Pair(
+            else -> Triple(
                 "Lätt jacka eller tröja är lagom.",
-                "👚"
+                "👚",
+                "NORMAL"
             )
         }
     }

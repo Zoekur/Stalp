@@ -28,6 +28,8 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
@@ -290,10 +292,50 @@ private fun LinearClockWidgetContent(
         
         Spacer(GlanceModifier.height(8.dp))
         
-        // 2. BOTTOM SECTION: Two Boxes (Weather+Clothing combined, Calendar)
+        // 2. BOTTOM SECTION: Two Boxes (Weather Text Left, Clothing Visual Right)
         Row(GlanceModifier.fillMaxWidth().height(120.dp)) {
             
-            // 2.1 Weather & Clothing Box (Left)
+            // 2.1 Weather Text Box (Left)
+            Box(
+                GlanceModifier
+                    .defaultWeight(1f)
+                    .fillMaxHeight()
+                    .background(ColorProvider(0xFFFFFFFF.toInt()))
+                    .cornerRadius(16.dp)
+                    .padding(2.dp)
+                    .background(colorBorder)
+            ) {
+                 Column(
+                    GlanceModifier
+                        .fillMaxSize()
+                        .padding(2.dp)
+                        .background(ColorProvider(0xFFFFFFFF.toInt()))
+                        .padding(8.dp),
+                    horizontalAlignment = Alignment.Start, // Align text to start
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (weatherData != null && weatherData.isDataLoaded) {
+                         // Temperature
+                         Text(
+                             text = "${weatherData.temperatureCelsius}°C",
+                             style = TextStyle(fontSize = TextUnit(24.dp.value, TextUnitType.Sp), fontWeight = FontWeight.Bold)
+                         )
+                         Spacer(GlanceModifier.height(4.dp))
+                         // Advice Text
+                         Text(
+                             text = weatherData.adviceText,
+                             style = TextStyle(fontSize = TextUnit(12.dp.value, TextUnitType.Sp)),
+                             maxLines = 4
+                         )
+                    } else {
+                        Text("Laddar väder...")
+                    }
+                }
+            }
+            
+            Spacer(GlanceModifier.width(8.dp))
+            
+            // 2.2 Clothing Visual Box (Right)
             Box(
                 GlanceModifier
                     .defaultWeight(1f)
@@ -313,80 +355,13 @@ private fun LinearClockWidgetContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (weatherData != null && weatherData.isDataLoaded) {
-                         // Icon
-                         Text(
-                            text = weatherData.adviceIcon,
-                            style = TextStyle(fontSize = TextUnit(32.dp.value, TextUnitType.Sp))
-                        )
-                        Spacer(GlanceModifier.height(4.dp))
-                         // Weather Text
-                         Text(
-                             text = "${weatherData.temperatureCelsius}°C",
-                             style = TextStyle(fontSize = TextUnit(16.dp.value, TextUnitType.Sp), fontWeight = FontWeight.Bold)
-                         )
-                         Text(
-                             text = weatherData.adviceText,
-                             style = TextStyle(fontSize = TextUnit(10.dp.value, TextUnitType.Sp)),
-                             maxLines = 3
-                         )
-                    } else {
-                        Text("Laddar väder...")
-                    }
-                }
-            }
-            
-            Spacer(GlanceModifier.width(8.dp))
-            
-            // 2.2 Calendar Box (Right) - NEW
-            Box(
-                GlanceModifier
-                    .defaultWeight(1f)
-                    .fillMaxHeight()
-                    .background(ColorProvider(0xFFFFFFFF.toInt()))
-                    .cornerRadius(16.dp)
-                    .padding(2.dp)
-                    .background(colorBorder)
-            ) {
-                 Column(
-                    GlanceModifier
-                        .fillMaxSize()
-                        .padding(2.dp)
-                        .background(ColorProvider(0xFFFFFFFF.toInt()))
-                        .padding(8.dp)
-                ) {
-                    Text(
-                        text = "Kalender",
-                        style = TextStyle(fontSize = TextUnit(12.dp.value, TextUnitType.Sp), fontWeight = FontWeight.Bold)
-                    )
-                    Spacer(GlanceModifier.height(4.dp))
-
-                    if (events.isEmpty()) {
-                        Text(
-                            text = "Inga fler händelser idag.",
-                            style = TextStyle(fontSize = TextUnit(10.dp.value, TextUnitType.Sp))
+                        Image(
+                            provider = ImageProvider(weatherData.getClothingResourceId()),
+                            contentDescription = "Clothing advice",
+                            modifier = GlanceModifier.fillMaxSize()
                         )
                     } else {
-                        // Display next 2-3 events
-                        val upcomingEvents = events.filter {
-                            val eventStartMin = it.start.hour * 60 + it.start.minute
-                            eventStartMin >= currentMinuteOfDay
-                        }.take(3)
-
-                        if (upcomingEvents.isEmpty()) {
-                             Text(
-                                text = "Inga fler händelser.",
-                                style = TextStyle(fontSize = TextUnit(10.dp.value, TextUnitType.Sp))
-                            )
-                        } else {
-                            upcomingEvents.forEach { event ->
-                                Text(
-                                    text = "• ${event.start} ${event.title}",
-                                    style = TextStyle(fontSize = TextUnit(10.dp.value, TextUnitType.Sp)),
-                                    maxLines = 1
-                                )
-                                Spacer(GlanceModifier.height(2.dp))
-                            }
-                        }
+                         Text("Laddar...")
                     }
                 }
             }
