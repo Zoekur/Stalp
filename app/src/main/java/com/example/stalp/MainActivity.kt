@@ -1,9 +1,14 @@
 package com.example.stalp
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -16,8 +21,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.example.stalp.ui.icons.StalpIcons
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,24 +56,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import android.content.pm.PackageManager
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.example.stalp.data.CalendarRepository
 import com.example.stalp.data.DayEvent
 import com.example.stalp.data.WeatherData
 import com.example.stalp.data.WeatherRepository
+import com.example.stalp.ui.icons.StalpIcons
 import com.example.stalp.ui.settings.SettingsScreen
 import com.example.stalp.ui.settings.ThemePreferences
+import com.example.stalp.ui.theme.StalpTheme
 import com.example.stalp.ui.theme.ThemeOption
 import com.example.stalp.ui.theme.ThemeSelector
-import com.example.stalp.ui.theme.StalpTheme
 import com.example.stalp.workers.WeatherWorker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import kotlin.math.max
-
 
 // -------- HUVUDAKTIVITET --------
 class MainActivity : ComponentActivity() {
@@ -112,67 +117,48 @@ fun LinearClockScreen(
     onSettingsClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val weatherRepository = remember { WeatherRepository(context) }
+    val calendarRepository = remember { CalendarRepository(context) }
 
     // Samlar in väderdata från DataStore i realtid
     val weatherData by weatherRepository.weatherDataFlow.collectAsState(initial = WeatherData())
 
-    val now by rememberTicker1s()
-    val timeLabel = now.format(DateTimeFormatter.ofPattern("HH:mm"))
+    // Events state
+    var events by remember { mutableStateOf(emptyList<DayEvent>()) }
 
-    // Exempeldata för events
-    val events = remember {
-        listOf(
-            DayEvent(
-                "sleep",
-                "Sömn",
-                LocalTime.of(0, 30),
-                LocalTime.of(6, 45),
-                color = Color(0xFF334155)
-            ),
-            DayEvent(
-                "commute",
-                "Pendling",
-                LocalTime.of(8, 0),
-                LocalTime.of(8, 30),
-                color = Color(0xFF6B7280)
-            ),
-            DayEvent(
-                "standup",
-                "Standup (Teams)",
-                LocalTime.of(9, 45),
-                LocalTime.of(10, 0),
-                color = Color(0xFF22C55E)
-            ),
-            DayEvent(
-                "lunch",
-                "Lunch",
-                LocalTime.of(12, 0),
-                LocalTime.of(12, 45),
-                icon = "🍽️",
-                color = Color(0xFFFDE047)
-            ),
-            DayEvent(
-                "focus",
-                "Fokusblock",
-                LocalTime.of(13, 15),
-                LocalTime.of(15, 0),
-                color = Color(0xFF38BDF8)
-            ),
-            DayEvent(
-                "gym",
-                "Träning",
-                LocalTime.of(18, 0),
-                LocalTime.of(19, 0),
-                icon = "🏋️",
-                color = Color(0xFFA78BFA)
-            )
-        )
+    // Permission launcher
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted: Boolean ->
+            if (isGranted) {
+                scope.launch {
+                    events = calendarRepository.getEventsForToday()
+                }
+            }
+        }
+    )
+
+    // Check permission and fetch events
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_CALENDAR
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            events = calendarRepository.getEventsForToday()
+        } else {
+            launcher.launch(Manifest.permission.READ_CALENDAR)
+        }
     }
+
+    val now by rememberTicker1s()
+    // Removed digital clock label as requested
 
     Column(
         Modifier
             .fillMaxSize()
+            .systemBarsPadding() // Fixar "black bar" problemet genom att undvika system bars
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -206,22 +192,12 @@ fun LinearClockScreen(
             onOptionSelected = onThemeOptionChange,
         )
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(24.dp)) // Increased spacing since clock is gone
 
-        // Huvudklocka
-        Text(
-            text = timeLabel,
-            fontSize = 36.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        // 1. Tidslinjen (Huvudkomponenten)
+        // 1. Tidslinjen (Huvudkomponenten) - Nu med dubbel höjd och hela dygnet
         LinearDayCard(
             now = now.toLocalTime(),
-            height = 84.dp
+            height = 168.dp // Dubblat från 84.dp
         )
 
         Spacer(Modifier.height(16.dp))
@@ -261,13 +237,14 @@ fun LinearClockScreen(
 @Composable
 fun LinearDayCard(
     now: LocalTime,
-    height: Dp = 80.dp
+    height: Dp = 160.dp
 ) {
     val hourLabelPaint = remember {
         Paint().apply {
             textAlign = Paint.Align.CENTER
-            textSize = 24f
+            textSize = 36f // Större text
             isAntiAlias = true
+            typeface = Typeface.DEFAULT_BOLD
         }
     }
     val hourLabelColor = MaterialTheme.colorScheme.onSurface.toArgb()
@@ -280,6 +257,8 @@ fun LinearDayCard(
     val trackBgColor = MaterialTheme.colorScheme.surfaceVariant
     val borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
     val tickColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+    val passedColor = Color(0xFFB7EA27)
+    val nowColor = Color(0xFFEF4444)
 
     Box(
         Modifier
@@ -296,7 +275,7 @@ fun LinearDayCard(
                 .background(surfaceColor, RoundedCornerShape(corner))
         )
 
-        // Canvas för tidslinje
+        // Canvas för tidslinje (00 - 24)
         Canvas(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -304,87 +283,109 @@ fun LinearDayCard(
                 .height(height)
         ) {
             val pad = 20.dp.toPx()
-            val trackTop = size.height * 0.18f
-            val trackHeight = size.height * 0.64f
+            val trackTop = size.height * 0.10f // Lite marginal i toppen
+            val trackHeight = size.height * 0.80f // Använd det mesta av höjden
             val right = size.width - pad
             val trackWidth = right - pad
-            val centerX = pad + trackWidth / 2f
+            val left = pad
 
             // Inre kapsel (Bakgrund)
             drawRoundRect(
                 color = trackBgColor,
-                topLeft = Offset(pad, trackTop),
+                topLeft = Offset(left, trackTop),
                 size = Size(trackWidth, trackHeight),
                 cornerRadius = CornerRadius(24f, 24f)
             )
 
-            // Zoom-inställningar (visa +/- 2 timmar)
-            val hoursToDisplay = 2
-            val minutesWindow = hoursToDisplay * 60f
-            // Pixlar per minut: Halva bredden representerar 2 timmar (120 min)
-            val pxPerMin = (trackWidth / 2f) / minutesWindow
+            // Beräkna pixlar per minut för HELA dygnet (24h = 1440 min)
+            val totalMinutes = 24 * 60
+            val pxPerMin = trackWidth / totalMinutes
 
-            // Grön fyllnad (Dåtid = vänster halva, fram till 'nu' i mitten)
-            drawRoundRect(
-                color = Color(0xFFB7EA27),
-                topLeft = Offset(pad, trackTop),
-                size = Size(trackWidth / 2f, trackHeight),
-                cornerRadius = CornerRadius(24f, 24f)
-            )
-            // Fix: Rita över högra halvan av den gröna rektangeln med en rät kant
-            drawRect(
-                color = Color(0xFFB7EA27),
-                topLeft = Offset(pad + 24f, trackTop),
-                size = Size((trackWidth / 2f) - 24f, trackHeight)
-            )
+            // Nuvarande tid i minuter
+            val currentMinutes = now.hour * 60 + now.minute
+            val currentX = left + (currentMinutes * pxPerMin)
 
-            // Inre kapsel (Border - ritas ovanpå)
+            // Grön fyllnad (Från 00:00 till nu)
+            val passedWidth = currentX - left
+            if (passedWidth > 0) {
+                 // Vi använder clipRect eller ritar helt enkelt rektangeln
+                 // För att få rundade hörn till vänster men rakt vid "nu" om vi vill,
+                 // eller bara en rektangel som klipps av container-kanten (lite svårare med drawRoundRect).
+                 // Enklast: Rita en rect men hantera hörnen.
+                 // Men här förenklar vi: rita en rektangel som representerar "passed".
+                 // Eftersom vi vill ha rundade hörn på "starten" (vänster), men kanske rakt på "slutet" (höger) vid currentX.
+
+                 // Vi ritar en rektangel med samma corner radius, men bredden justerad.
+                 // Om bredden är mindre än corner radius kan det se konstigt ut, men det är ok.
+                 drawRoundRect(
+                    color = passedColor,
+                    topLeft = Offset(left, trackTop),
+                    size = Size(passedWidth, trackHeight),
+                    cornerRadius = CornerRadius(24f, 24f)
+                )
+                 // Fix för högra hörnet om det ska vara "skarpt" vid tidslinjen (valfritt, men snyggare)
+                 if (passedWidth > 24f) {
+                     drawRect(
+                         color = passedColor,
+                         topLeft = Offset(currentX - 10f, trackTop),
+                         size = Size(10f, trackHeight)
+                     )
+                 }
+            }
+
+            // Inre kapsel (Border - ritas ovanpå för snyggare kant)
             drawRoundRect(
                 color = borderColor,
-                topLeft = Offset(pad, trackTop),
+                topLeft = Offset(left, trackTop),
                 size = Size(trackWidth, trackHeight),
                 style = Stroke(width = 2f),
                 cornerRadius = CornerRadius(24f, 24f)
             )
 
-            // Timetiketter
-            val currentHour = now.hour
-            val currentMinute = now.minute
+            // Loopa igenom 24 timmar
+            for (h in 0..24) {
+                val min = h * 60
+                val x = left + (min * pxPerMin)
 
-            // Iterera offset från -3 till +3 timmar
-            for (offset in -3..3) {
-                val targetHour = currentHour + offset
-                val labelVal = (targetHour % 24 + 24) % 24
-                val label = String.format("%02d", labelVal)
+                // Rita Tim-markering (långt streck)
+                drawLine(
+                    color = tickColor,
+                    start = Offset(x, trackTop),
+                    end = Offset(x, trackTop + trackHeight * 0.4f), // 40% av höjden
+                    strokeWidth = 2f
+                )
 
-                // Skillnad i minuter från 'nu'
-                val diffMinutes = (offset * 60) - currentMinute
-                val x = centerX + (diffMinutes * pxPerMin)
-
-                if (x >= pad && x <= pad + trackWidth) {
-                    // Rita tick
-                    drawLine(
-                        color = tickColor,
-                        start = Offset(x, trackTop),
-                        end = Offset(x, trackTop + trackHeight * 0.3f),
-                        strokeWidth = 2f
-                    )
-
-                    // Rita text
+                // Text: Endast för 6, 12, 18, 24 (visas som 24 eller 0, här 24 för "slut på dygnet" känsla eller 0)
+                // Användaren sa: "Vid timmarna 6 12 18 24 kan siffrorna få stå"
+                if (h % 6 == 0 && h != 0) { // 6, 12, 18, 24. Hoppar över 0 för att inte krocka med startkant (eller visa 0?)
+                    // Användaren sa 24.
+                    val label = h.toString()
                     drawContext.canvas.nativeCanvas.drawText(
                         label,
                         x,
-                        trackTop + trackHeight / 2f + 12f,
+                        trackTop + trackHeight / 2f + 18f, // Centrerat vertikalt ungefär
                         hourLabelPaint
+                    )
+                }
+
+                // Halvtimmar (korta streck) - men inte efter 24
+                if (h < 24) {
+                    val halfMin = min + 30
+                    val halfX = left + (halfMin * pxPerMin)
+                    drawLine(
+                        color = tickColor.copy(alpha = 0.3f), // Svagare
+                        start = Offset(halfX, trackTop),
+                        end = Offset(halfX, trackTop + trackHeight * 0.2f), // Kortare (20%)
+                        strokeWidth = 2f
                     )
                 }
             }
 
-            // Nu-markör (röd linje i mitten)
+            // Nu-markör (röd linje)
             drawLine(
-                color = Color(0xFFEF4444),
-                start = Offset(centerX, trackTop),
-                end = Offset(centerX, trackTop + trackHeight),
+                color = nowColor,
+                start = Offset(currentX, trackTop),
+                end = Offset(currentX, trackTop + trackHeight),
                 strokeWidth = 4f,
                 cap = StrokeCap.Square
             )
