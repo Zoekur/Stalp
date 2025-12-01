@@ -76,3 +76,9 @@ class CalendarRepository(private val context: Context) {
                             color = androidx.compose.ui.graphics.Color(color)
                         )
                     )
+                }
+            }
+            events
+        }
+    }
+}

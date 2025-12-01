@@ -3,7 +3,7 @@ package com.example.stalp.workers
 import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
-import androidx.glance.appwidget.state.PreferencesGlanceStateDefinition
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.datastore.preferences.core.Preferences
 import androidx.work.CoroutineWorker
 import androidx.work.Constraints

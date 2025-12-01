@@ -15,7 +15,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
-import androidx.glance.appwidget.state.PreferencesGlanceStateDefinition
+import androidx.glance.state.PreferencesGlanceStateDefinition
+import androidx.datastore.preferences.core.MutablePreferences
 import com.example.stalp.ui.settings.ThemePreferences
 import com.example.stalp.ui.theme.StalpTheme
 import com.example.stalp.ui.theme.ThemeOption
@@ -86,12 +87,14 @@ class LinearClockConfigActivity : ComponentActivity() {
 
                                     if (glanceId != null) {
                                         updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
-                                            prefs[LinearClockPrefs.FONT_FAMILY] = config.font
-                                            prefs[LinearClockPrefs.FONT_SCALE] = config.scale
-                                            prefs[LinearClockPrefs.COLOR_BG] = config.backgroundColor
-                                            prefs[LinearClockPrefs.COLOR_TEXT] = config.textColor
-                                            prefs[LinearClockPrefs.COLOR_ACCENT] = config.accentColor
-                                            prefs[LinearClockPrefs.HOURS_TO_SHOW] = config.hoursToShow
+                                            prefs.toMutablePreferences().apply {
+                                                this[LinearClockPrefs.FONT_FAMILY] = config.font
+                                                this[LinearClockPrefs.FONT_SCALE] = config.scale
+                                                this[LinearClockPrefs.COLOR_BG] = config.backgroundColor
+                                                this[LinearClockPrefs.COLOR_TEXT] = config.textColor
+                                                this[LinearClockPrefs.COLOR_ACCENT] = config.accentColor
+                                                this[LinearClockPrefs.HOURS_TO_SHOW] = config.hoursToShow
+                                            }
                                         }
                                         LinearClockWidget.update(context, glanceId)
                                     }
