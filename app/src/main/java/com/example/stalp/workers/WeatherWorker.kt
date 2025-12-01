@@ -16,6 +16,7 @@ import com.example.stalp.data.WeatherRepository
 import com.example.stalp.widget.LinearClockWidget
 import com.example.stalp.widget.LinearClockPrefs
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
@@ -26,16 +27,35 @@ class WeatherWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            // Mock weather fetching logic
-            // In a real app, you would make a network call here
-            // e.g. using Retrofit to fetch from an API
-            
-            // Randomly generate some weather data for demo purposes
-            // Or hardcode it to match the visualization requirements partially
-            val temp = (-10..35).random()
-            val precipChance = (0..100).random()
-            
             val repository = WeatherRepository(context)
+
+            // Fetch settings to determine location source
+            val settings = repository.locationSettingsFlow.first()
+
+            // Mock weather fetching logic
+            // In a real app, you would make a network call here using 'settings.useCurrentLocation' and 'settings.manualLocationName'
+            // For now, we simulate different weather based on location just to show it works
+            
+            val temp: Int
+            val precipChance: Int
+
+            if (settings.useCurrentLocation) {
+                // Simulating GPS location weather (random but consistent for "local")
+                temp = (-5..25).random()
+                precipChance = (0..50).random()
+            } else {
+                 // Simulating Manual location weather
+                 if (settings.manualLocationName.isNotBlank()) {
+                     // Generate "deterministic" random based on name length to simulate different weather for different cities
+                     val seed = settings.manualLocationName.length
+                     temp = (seed % 30) // Just a mock
+                     precipChance = (seed * 10 % 100)
+                 } else {
+                     temp = 20
+                     precipChance = 0
+                 }
+            }
+            
             repository.saveWeatherData(temp, precipChance)
 
             // Update all widgets
@@ -44,8 +64,6 @@ class WeatherWorker(
             
             glanceIds.forEach { glanceId ->
                 // Trigger widget update. 
-                // Since LinearClockWidget reads from WeatherRepository in its Content (or we will make it so),
-                // we just need to trigger a refresh.
                 LinearClockWidget.update(context, glanceId)
             }
 

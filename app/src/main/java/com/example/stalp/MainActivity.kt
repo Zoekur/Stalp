@@ -3,6 +3,7 @@ package com.example.stalp
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -78,6 +79,9 @@ import java.time.format.DateTimeFormatter
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Enable Edge to Edge to draw behind system bars
+        enableEdgeToEdge()
+
         // Schemalägger väder-workern att starta så snart appen öppnas
         WeatherWorker.schedule(applicationContext)
 
@@ -191,22 +195,13 @@ fun LinearClockScreen(
             onOptionSelected = onThemeOptionChange,
         )
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(24.dp)) // Increased spacing since clock is gone
 
-        // Huvudklocka
-        Text(
-            text = timeLabel,
-            fontSize = 36.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        // 1. Tidslinjen (Huvudkomponenten)
+        // 1. Tidslinjen (Huvudkomponenten) - Nu med dubbel höjd och hela dygnet
         LinearDayCard(
             now = now.toLocalTime(),
-            height = 84.dp
+            height = 168.dp, // Dubblat från 84.dp
+            events = events // Passar events till tidslinjen
         )
 
         Spacer(Modifier.height(16.dp))
@@ -246,13 +241,15 @@ fun LinearClockScreen(
 @Composable
 fun LinearDayCard(
     now: LocalTime,
-    height: Dp = 80.dp
+    height: Dp = 160.dp,
+    events: List<DayEvent> = emptyList() // Tog emot events
 ) {
     val hourLabelPaint = remember {
         Paint().apply {
             textAlign = Paint.Align.CENTER
-            textSize = 24f
+            textSize = 36f // Större text
             isAntiAlias = true
+            typeface = Typeface.DEFAULT_BOLD
         }
     }
     val hourLabelColor = MaterialTheme.colorScheme.onSurface.toArgb()
@@ -265,6 +262,9 @@ fun LinearDayCard(
     val trackBgColor = MaterialTheme.colorScheme.surfaceVariant
     val borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
     val tickColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+    val passedColor = Color(0xFFB7EA27)
+    val nowColor = Color(0xFFEF4444)
+    val eventColor = Color(0xFFE0E0E0) // Ljusgrå för events på tidslinjen
 
     Box(
         Modifier
@@ -281,7 +281,7 @@ fun LinearDayCard(
                 .background(surfaceColor, RoundedCornerShape(corner))
         )
 
-        // Canvas för tidslinje
+        // Canvas för tidslinje (00 - 24)
         Canvas(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -289,87 +289,116 @@ fun LinearDayCard(
                 .height(height)
         ) {
             val pad = 20.dp.toPx()
-            val trackTop = size.height * 0.18f
-            val trackHeight = size.height * 0.64f
+            val trackTop = size.height * 0.10f // Lite marginal i toppen
+            val trackHeight = size.height * 0.80f // Använd det mesta av höjden
             val right = size.width - pad
             val trackWidth = right - pad
-            val centerX = pad + trackWidth / 2f
+            val left = pad
 
             // Inre kapsel (Bakgrund)
             drawRoundRect(
                 color = trackBgColor,
-                topLeft = Offset(pad, trackTop),
+                topLeft = Offset(left, trackTop),
                 size = Size(trackWidth, trackHeight),
                 cornerRadius = CornerRadius(24f, 24f)
             )
 
-            // Zoom-inställningar (visa +/- 2 timmar)
-            val hoursToDisplay = 2
-            val minutesWindow = hoursToDisplay * 60f
-            // Pixlar per minut: Halva bredden representerar 2 timmar (120 min)
-            val pxPerMin = (trackWidth / 2f) / minutesWindow
+            // Beräkna pixlar per minut för HELA dygnet (24h = 1440 min)
+            val totalMinutes = 24 * 60
+            val pxPerMin = trackWidth / totalMinutes
 
-            // Grön fyllnad (Dåtid = vänster halva, fram till 'nu' i mitten)
-            drawRoundRect(
-                color = Color(0xFFB7EA27),
-                topLeft = Offset(pad, trackTop),
-                size = Size(trackWidth / 2f, trackHeight),
-                cornerRadius = CornerRadius(24f, 24f)
-            )
-            // Fix: Rita över högra halvan av den gröna rektangeln med en rät kant
-            drawRect(
-                color = Color(0xFFB7EA27),
-                topLeft = Offset(pad + 24f, trackTop),
-                size = Size((trackWidth / 2f) - 24f, trackHeight)
-            )
+            // Rita events (Som små markörer eller block i bakgrunden)
+            events.forEach { event ->
+                val startMin = event.start.hour * 60 + event.start.minute
+                val endMin = (event.end?.hour ?: 0) * 60 + (event.end?.minute ?: 0)
 
-            // Inre kapsel (Border - ritas ovanpå)
+                // Enkel hantering av events som går över midnatt eller saknar slut -> visa 1h
+                val actualEndMin = if (event.end != null && endMin > startMin) endMin else startMin + 60
+
+                val eventStartPx = left + (startMin * pxPerMin)
+                val eventWidthPx = (actualEndMin - startMin) * pxPerMin
+
+                // Rita event som ett färgat block (svagt)
+                drawRect(
+                    color = event.color.copy(alpha = 0.3f), // Använd eventets färg, transparent
+                    topLeft = Offset(eventStartPx, trackTop),
+                    size = Size(eventWidthPx, trackHeight)
+                )
+            }
+
+            // Nuvarande tid i minuter
+            val currentMinutes = now.hour * 60 + now.minute
+            val currentX = left + (currentMinutes * pxPerMin)
+
+            // Grön fyllnad (Från 00:00 till nu)
+            val passedWidth = currentX - left
+            if (passedWidth > 0) {
+                 drawRoundRect(
+                    color = passedColor,
+                    topLeft = Offset(left, trackTop),
+                    size = Size(passedWidth, trackHeight),
+                    cornerRadius = CornerRadius(24f, 24f)
+                )
+                 if (passedWidth > 24f) {
+                     drawRect(
+                         color = passedColor,
+                         topLeft = Offset(currentX - 10f, trackTop),
+                         size = Size(10f, trackHeight)
+                     )
+                 }
+            }
+
+            // Inre kapsel (Border - ritas ovanpå för snyggare kant)
             drawRoundRect(
                 color = borderColor,
-                topLeft = Offset(pad, trackTop),
+                topLeft = Offset(left, trackTop),
                 size = Size(trackWidth, trackHeight),
                 style = Stroke(width = 2f),
                 cornerRadius = CornerRadius(24f, 24f)
             )
 
-            // Timetiketter
-            val currentHour = now.hour
-            val currentMinute = now.minute
+            // Loopa igenom 24 timmar
+            for (h in 0..24) {
+                val min = h * 60
+                val x = left + (min * pxPerMin)
 
-            // Iterera offset från -3 till +3 timmar
-            for (offset in -3..3) {
-                val targetHour = currentHour + offset
-                val labelVal = (targetHour % 24 + 24) % 24
-                val label = String.format("%02d", labelVal)
+                // Rita Tim-markering (långt streck)
+                drawLine(
+                    color = tickColor,
+                    start = Offset(x, trackTop),
+                    end = Offset(x, trackTop + trackHeight * 0.4f), // 40% av höjden
+                    strokeWidth = 2f
+                )
 
-                // Skillnad i minuter från 'nu'
-                val diffMinutes = (offset * 60) - currentMinute
-                val x = centerX + (diffMinutes * pxPerMin)
-
-                if (x >= pad && x <= pad + trackWidth) {
-                    // Rita tick
-                    drawLine(
-                        color = tickColor,
-                        start = Offset(x, trackTop),
-                        end = Offset(x, trackTop + trackHeight * 0.3f),
-                        strokeWidth = 2f
-                    )
-
-                    // Rita text
+                // Text: Endast för 6, 12, 18, 24
+                if (h % 6 == 0 && h != 0) {
+                    val label = h.toString()
                     drawContext.canvas.nativeCanvas.drawText(
                         label,
                         x,
-                        trackTop + trackHeight / 2f + 12f,
+                        trackTop + trackHeight / 2f + 18f, // Centrerat vertikalt ungefär
                         hourLabelPaint
+                    )
+                }
+
+                // Halvtimmar (korta streck) - men inte efter 24
+                if (h < 24) {
+                    val halfMin = min + 30
+                    val halfX = left + (halfMin * pxPerMin)
+                    drawLine(
+                        color = tickColor.copy(alpha = 0.3f), // Svagare
+                        start = Offset(halfX, trackTop),
+                        end = Offset(halfX, trackTop + trackHeight * 0.2f), // Kortare (20%)
+                        strokeWidth = 2f
                     )
                 }
             }
 
-            // Nu-markör (röd linje i mitten)
+            // Nu-markör (röd linje)
             drawLine(
-                color = Color(0xFFEF4444),
-                start = Offset(centerX, trackTop),
-                end = Offset(centerX, trackTop + trackHeight),
+                color = nowColor,
+                start = Offset(currentX, trackTop),
+                end = Offset(currentX, trackTop + trackHeight),
                 strokeWidth = 4f,
                 cap = StrokeCap.Square
             )
