@@ -106,8 +106,6 @@ fun LinearClockScreen(
 
     val now by rememberTicker1s()
     val timeLabel = now.format(DateTimeFormatter.ofPattern("HH:mm"))
-    val mins = now.hour * 60 + now.minute
-    val pct = mins / (24f * 60f)
 
     // Exempeldata för events
     val events = remember {
@@ -184,9 +182,7 @@ fun LinearClockScreen(
 
         // 1. Tidslinjen (Huvudkomponenten)
         LinearDayCard(
-            progress = pct,
             now = now.toLocalTime(),
-            events = events,
             height = 84.dp
         )
 
@@ -212,24 +208,14 @@ fun LinearClockScreen(
 }
 
 // ----------------------------------------------------------
-// 1. TIDSLINJE KOMPONENTER (från föregående kodblock)
+// 1. TIDSLINJE KOMPONENTER
 // ----------------------------------------------------------
 
 @Composable
 fun LinearDayCard(
-    progress: Float,
     now: LocalTime,
-    events: List<DayEvent>,
     height: Dp = 80.dp
 ) {
-    val eventSegments = remember(events) {
-        events.map { e ->
-            val startFrac = fractionOfDay(e.start)
-            val endFracRaw = e.end?.let { fractionOfDay(it) } ?: startFrac
-            val endFrac = if (endFracRaw < startFrac) endFracRaw + 1.0f else endFracRaw
-            EventSegment(event = e, start = startFrac, end = endFrac)
-        }
-    }
     val hourLabelPaint = remember {
         Paint().apply {
             textAlign = Paint.Align.CENTER
@@ -239,14 +225,16 @@ fun LinearDayCard(
     }
     val hourLabelColor = MaterialTheme.colorScheme.onSurface.toArgb()
     SideEffect { hourLabelPaint.color = hourLabelColor }
+
     val corner = 28.dp
+
     Box(
         Modifier
             .fillMaxWidth()
             .height(height + 24.dp)
             .background(Color.Transparent)
     ) {
-        // Yttre kapsel
+        // Yttre kapsel (Bakgrund)
         Box(
             Modifier
                 .align(Alignment.TopCenter)
@@ -255,19 +243,7 @@ fun LinearDayCard(
                 .background(Color.White, RoundedCornerShape(corner))
         )
 
-        // Grön fyllnad (dagens progress)
-        Box(
-            Modifier
-                .align(Alignment.TopStart)
-                .height(height)
-                .fillMaxWidth(progress.coerceIn(0f, 1f))
-                .background(
-                    Color(0xFFB7EA27),
-                    RoundedCornerShape(topStart = corner, bottomStart = corner)
-                )
-        )
-
-        // Canvas för timetiketter, events, markör
+        // Canvas för tidslinje
         Canvas(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -279,6 +255,7 @@ fun LinearDayCard(
             val trackHeight = size.height * 0.64f
             val right = size.width - pad
             val trackWidth = right - pad
+            val centerX = pad + trackWidth / 2f
 
             // Inre kapsel (Bakgrund)
             drawRoundRect(
@@ -287,7 +264,28 @@ fun LinearDayCard(
                 size = Size(trackWidth, trackHeight),
                 cornerRadius = CornerRadius(24f, 24f)
             )
-            // Inre kapsel (Border)
+
+            // Zoom-inställningar (visa +/- 2 timmar)
+            val hoursToDisplay = 2
+            val minutesWindow = hoursToDisplay * 60f
+            // Pixlar per minut: Halva bredden representerar 2 timmar (120 min)
+            val pxPerMin = (trackWidth / 2f) / minutesWindow
+
+            // Grön fyllnad (Dåtid = vänster halva, fram till 'nu' i mitten)
+            drawRoundRect(
+                color = Color(0xFFB7EA27),
+                topLeft = Offset(pad, trackTop),
+                size = Size(trackWidth / 2f, trackHeight),
+                cornerRadius = CornerRadius(24f, 24f)
+            )
+            // Fix: Rita över högra halvan av den gröna rektangeln med en rät kant
+            drawRect(
+                color = Color(0xFFB7EA27),
+                topLeft = Offset(pad + 24f, trackTop),
+                size = Size((trackWidth / 2f) - 24f, trackHeight)
+            )
+
+            // Inre kapsel (Border - ritas ovanpå)
             drawRoundRect(
                 color = Color.Black.copy(alpha = 0.75f),
                 topLeft = Offset(pad, trackTop),
@@ -296,99 +294,47 @@ fun LinearDayCard(
                 cornerRadius = CornerRadius(24f, 24f)
             )
 
-            // Grön fyllnad inne i kapseln (Dagens progress)
-            drawRoundRect(
-                color = Color(0xFFB7EA27),
-                topLeft = Offset(pad, trackTop),
-                size = Size(trackWidth * progress.coerceIn(0f, 1f), trackHeight),
-                cornerRadius = CornerRadius(24f, 24f)
-            )
+            // Timetiketter
+            val currentHour = now.hour
+            val currentMinute = now.minute
 
-            // Timetiketter 1–24
-            for (h in 1..24) {
-                val x = pad + trackWidth * (h / 24f)
-                val label =
-                    if (h == 24) "24" else h.toString() // Ändrat till "24" istället för "24/00"
-                drawContext.canvas.nativeCanvas.drawText(
-                    label,
-                    x,
-                    trackTop + trackHeight / 2f + 8f,
-                    hourLabelPaint
-                )
+            // Iterera offset från -3 till +3 timmar
+            for (offset in -3..3) {
+                val targetHour = currentHour + offset
+                val labelVal = (targetHour % 24 + 24) % 24
+                val label = String.format("%02d", labelVal)
+
+                // Skillnad i minuter från 'nu'
+                val diffMinutes = (offset * 60) - currentMinute
+                val x = centerX + (diffMinutes * pxPerMin)
+
+                if (x >= pad && x <= pad + trackWidth) {
+                    // Rita tick
+                    drawLine(
+                        color = Color.Black.copy(alpha = 0.5f),
+                        start = Offset(x, trackTop),
+                        end = Offset(x, trackTop + trackHeight * 0.3f),
+                        strokeWidth = 2f
+                    )
+
+                    // Rita text
+                    drawContext.canvas.nativeCanvas.drawText(
+                        label,
+                        x,
+                        trackTop + trackHeight / 2f + 12f,
+                        hourLabelPaint
+                    )
+                }
             }
 
-            // Event-segment (Lila händelser)
-            eventSegments.forEach { segment ->
-                val startX = pad + trackWidth * segment.start
-                val endX = pad + trackWidth * segment.end
-                val w = max(endX - startX, trackWidth * 0.008f)
-                val segTop = trackTop + trackHeight * 0.08f
-                val segHeight = trackHeight * 0.84f
-
-                drawRoundRect(
-                    color = segment.event.color,
-                    topLeft = Offset(startX, segTop),
-                    size = Size(w, segHeight),
-                    cornerRadius = CornerRadius(10f, 10f)
-                )
-            }
-
-            // Nu-markör (röd linje)
-            val nowX = pad + trackWidth * fractionOfDay(now)
+            // Nu-markör (röd linje i mitten)
             drawLine(
-                color = Color.Red,
-                start = Offset(nowX, trackTop),
-                end = Offset(nowX, trackTop + trackHeight),
+                color = Color(0xFFEF4444),
+                start = Offset(centerX, trackTop),
+                end = Offset(centerX, trackTop + trackHeight),
                 strokeWidth = 4f,
                 cap = StrokeCap.Square
             )
-        }
-
-        // Ikonbubblor + titlar
-        EventLabelsOverlay(events = events, height = height)
-    }
-}
-
-// -------- IKONER --------
-@Composable
-private fun EventLabelsOverlay(events: List<DayEvent>, height: Dp) {
-    Box(Modifier.fillMaxSize()) {
-        events.filter { it.icon != null }.forEach { e ->
-            val frac = fractionOfDay(e.start).coerceIn(0.0001f, 0.9999f)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(height + 24.dp),
-                contentAlignment = Alignment.TopStart
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                ) {
-                    Spacer(Modifier.weight(frac))
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            Modifier
-                                .size(24.dp)
-                                .background(Color.White, RoundedCornerShape(12.dp))
-                        ) {
-                            Text(
-                                e.icon!!,
-                                modifier = Modifier.align(Alignment.Center),
-                                fontSize = 14.sp
-                            )
-                        }
-                        Text(
-                            e.title,
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                    Spacer(Modifier.weight(1f - frac))
-                }
-            }
         }
     }
 }
@@ -532,12 +478,6 @@ fun ClothingAdviceCard(modifier: Modifier = Modifier, data: WeatherData) {
 }
 
 // -------- HJÄLPARE --------
-private data class EventSegment(val event: DayEvent, val start: Float, val end: Float)
-
-private fun fractionOfDay(t: LocalTime): Float {
-    val mins = t.hour * 60 + t.minute
-    return mins / (24f * 60f)
-}
 
 // -------- ENKEL TICKER --------
 @Composable
