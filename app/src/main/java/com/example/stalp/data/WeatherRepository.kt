@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 
@@ -19,6 +20,10 @@ object WeatherPreferencesKeys {
     val ADVICE_TEXT = stringPreferencesKey("advice_text") // Sparar rådtexten
     val CLOTHING_TYPE = stringPreferencesKey("clothing_type") // Sparar typ av kläder som sträng
     val DATA_LOADED = booleanPreferencesKey("data_loaded")
+
+    // New Location Settings
+    val USE_CURRENT_LOCATION = booleanPreferencesKey("use_current_location")
+    val MANUAL_LOCATION_NAME = stringPreferencesKey("manual_location_name")
 }
 
 // Data class för att representera väderdata i Compose
@@ -40,6 +45,12 @@ data class WeatherData(
         }
     }
 }
+
+// Data class for location settings
+data class WeatherLocationSettings(
+    val useCurrentLocation: Boolean = true,
+    val manualLocationName: String = ""
+)
 
 // Konstanter för klädrådslogik (enligt din skiss)
 object ClothingAdvice {
@@ -68,6 +79,15 @@ class WeatherRepository(private val context: Context) {
             )
         }
 
+    // Flow for location settings
+    val locationSettingsFlow: Flow<WeatherLocationSettings> = dataStore.data
+        .map { prefs ->
+            WeatherLocationSettings(
+                useCurrentLocation = prefs[WeatherPreferencesKeys.USE_CURRENT_LOCATION] ?: true,
+                manualLocationName = prefs[WeatherPreferencesKeys.MANUAL_LOCATION_NAME] ?: ""
+            )
+        }
+
     // Skriver ny väderdata till DataStore
     suspend fun saveWeatherData(temp: Int, precipChance: Int) {
         val (adviceText, adviceIcon, clothingType) = generateClothingAdvice(temp, precipChance)
@@ -79,6 +99,14 @@ class WeatherRepository(private val context: Context) {
             prefs[WeatherPreferencesKeys.IS_COLD_ADVICE] = adviceIcon
             prefs[WeatherPreferencesKeys.CLOTHING_TYPE] = clothingType
             prefs[WeatherPreferencesKeys.DATA_LOADED] = true
+        }
+    }
+
+    // Save location settings
+    suspend fun saveLocationSettings(useCurrent: Boolean, manualName: String) {
+        dataStore.edit { prefs ->
+            prefs[WeatherPreferencesKeys.USE_CURRENT_LOCATION] = useCurrent
+            prefs[WeatherPreferencesKeys.MANUAL_LOCATION_NAME] = manualName
         }
     }
 
