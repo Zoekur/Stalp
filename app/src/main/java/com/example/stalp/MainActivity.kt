@@ -1,9 +1,13 @@
 package com.example.stalp
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -16,8 +20,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.example.stalp.ui.icons.StalpIcons
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,24 +55,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import android.content.pm.PackageManager
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.example.stalp.data.CalendarRepository
 import com.example.stalp.data.DayEvent
 import com.example.stalp.data.WeatherData
 import com.example.stalp.data.WeatherRepository
+import com.example.stalp.ui.icons.StalpIcons
 import com.example.stalp.ui.settings.SettingsScreen
 import com.example.stalp.ui.settings.ThemePreferences
+import com.example.stalp.ui.theme.StalpTheme
 import com.example.stalp.ui.theme.ThemeOption
 import com.example.stalp.ui.theme.ThemeSelector
-import com.example.stalp.ui.theme.StalpTheme
 import com.example.stalp.workers.WeatherWorker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import kotlin.math.max
-
 
 // -------- HUVUDAKTIVITET --------
 class MainActivity : ComponentActivity() {
@@ -112,67 +116,48 @@ fun LinearClockScreen(
     onSettingsClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val weatherRepository = remember { WeatherRepository(context) }
+    val calendarRepository = remember { CalendarRepository(context) }
 
     // Samlar in väderdata från DataStore i realtid
     val weatherData by weatherRepository.weatherDataFlow.collectAsState(initial = WeatherData())
 
+    // Events state
+    var events by remember { mutableStateOf(emptyList<DayEvent>()) }
+
+    // Permission launcher
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted: Boolean ->
+            if (isGranted) {
+                scope.launch {
+                    events = calendarRepository.getEventsForToday()
+                }
+            }
+        }
+    )
+
+    // Check permission and fetch events
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_CALENDAR
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            events = calendarRepository.getEventsForToday()
+        } else {
+            launcher.launch(Manifest.permission.READ_CALENDAR)
+        }
+    }
+
     val now by rememberTicker1s()
     val timeLabel = now.format(DateTimeFormatter.ofPattern("HH:mm"))
-
-    // Exempeldata för events
-    val events = remember {
-        listOf(
-            DayEvent(
-                "sleep",
-                "Sömn",
-                LocalTime.of(0, 30),
-                LocalTime.of(6, 45),
-                color = Color(0xFF334155)
-            ),
-            DayEvent(
-                "commute",
-                "Pendling",
-                LocalTime.of(8, 0),
-                LocalTime.of(8, 30),
-                color = Color(0xFF6B7280)
-            ),
-            DayEvent(
-                "standup",
-                "Standup (Teams)",
-                LocalTime.of(9, 45),
-                LocalTime.of(10, 0),
-                color = Color(0xFF22C55E)
-            ),
-            DayEvent(
-                "lunch",
-                "Lunch",
-                LocalTime.of(12, 0),
-                LocalTime.of(12, 45),
-                icon = "🍽️",
-                color = Color(0xFFFDE047)
-            ),
-            DayEvent(
-                "focus",
-                "Fokusblock",
-                LocalTime.of(13, 15),
-                LocalTime.of(15, 0),
-                color = Color(0xFF38BDF8)
-            ),
-            DayEvent(
-                "gym",
-                "Träning",
-                LocalTime.of(18, 0),
-                LocalTime.of(19, 0),
-                icon = "🏋️",
-                color = Color(0xFFA78BFA)
-            )
-        )
-    }
 
     Column(
         Modifier
             .fillMaxSize()
+            .systemBarsPadding() // Fixar "black bar" problemet genom att undvika system bars
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
