@@ -153,7 +153,7 @@ fun LinearClockScreen(
     }
 
     val now by rememberTicker1s()
-    // Removed digital clock label as requested
+    val timeLabel = now.format(DateTimeFormatter.ofPattern("HH:mm"))
 
     Column(
         Modifier
