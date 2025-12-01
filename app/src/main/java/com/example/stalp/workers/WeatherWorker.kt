@@ -2,9 +2,6 @@ package com.example.stalp.workers
 
 import android.content.Context
 import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.state.updateAppWidgetState
-import androidx.glance.state.PreferencesGlanceStateDefinition
-import androidx.datastore.preferences.core.Preferences
 import androidx.work.CoroutineWorker
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -14,7 +11,6 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.stalp.data.WeatherRepository
 import com.example.stalp.widget.LinearClockWidget
-import com.example.stalp.widget.LinearClockPrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -33,9 +29,6 @@ class WeatherWorker(
             val settings = repository.locationSettingsFlow.first()
 
             // Mock weather fetching logic
-            // In a real app, you would make a network call here using 'settings.useCurrentLocation' and 'settings.manualLocationName'
-            // For now, we simulate different weather based on location just to show it works
-            
             val temp: Int
             val precipChance: Int
 
@@ -48,7 +41,7 @@ class WeatherWorker(
                  if (settings.manualLocationName.isNotBlank()) {
                      // Generate "deterministic" random based on name length to simulate different weather for different cities
                      val seed = settings.manualLocationName.length
-                     temp = (seed % 30) // Just a mock
+                     temp = (seed % 30)
                      precipChance = (seed * 10 % 100)
                  } else {
                      temp = 20
