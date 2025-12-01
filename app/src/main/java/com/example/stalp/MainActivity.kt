@@ -173,28 +173,40 @@ fun LinearClockScreen(
     Column(
         Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(Modifier.fillMaxWidth()) {
-            // Theme Selector centered
-            Box(Modifier.align(Alignment.Center)) {
-                ThemeSelector(
-                    selectedOption = themeOption,
-                    onOptionSelected = onThemeOptionChange,
-                )
-            }
+        // TOP HEADER: Title (Left) + Settings (Right)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Stalp",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp
+            )
 
-            // Settings Button top-right
-            IconButton(
-                onClick = onSettingsClick,
-                modifier = Modifier.align(Alignment.CenterEnd)
-            ) {
-                Icon(StalpIcons.Settings, contentDescription = "Settings")
+            IconButton(onClick = onSettingsClick) {
+                Icon(
+                    imageVector = StalpIcons.Settings,
+                    contentDescription = "Settings",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
+
+        // Theme Selector (Optional placement)
+        ThemeSelector(
+            selectedOption = themeOption,
+            onOptionSelected = onThemeOptionChange,
+        )
+
+        Spacer(Modifier.height(8.dp))
 
         // Huvudklocka
         Text(
@@ -263,6 +275,12 @@ fun LinearDayCard(
 
     val corner = 28.dp
 
+    // Theme colors
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val trackBgColor = MaterialTheme.colorScheme.surfaceVariant
+    val borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+    val tickColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+
     Box(
         Modifier
             .fillMaxWidth()
@@ -275,7 +293,7 @@ fun LinearDayCard(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .height(height)
-                .background(Color.White, RoundedCornerShape(corner))
+                .background(surfaceColor, RoundedCornerShape(corner))
         )
 
         // Canvas för tidslinje
@@ -294,7 +312,7 @@ fun LinearDayCard(
 
             // Inre kapsel (Bakgrund)
             drawRoundRect(
-                color = Color(0xFFF8F8F8),
+                color = trackBgColor,
                 topLeft = Offset(pad, trackTop),
                 size = Size(trackWidth, trackHeight),
                 cornerRadius = CornerRadius(24f, 24f)
@@ -322,7 +340,7 @@ fun LinearDayCard(
 
             // Inre kapsel (Border - ritas ovanpå)
             drawRoundRect(
-                color = Color.Black.copy(alpha = 0.75f),
+                color = borderColor,
                 topLeft = Offset(pad, trackTop),
                 size = Size(trackWidth, trackHeight),
                 style = Stroke(width = 2f),
@@ -346,7 +364,7 @@ fun LinearDayCard(
                 if (x >= pad && x <= pad + trackWidth) {
                     // Rita tick
                     drawLine(
-                        color = Color.Black.copy(alpha = 0.5f),
+                        color = tickColor,
                         start = Offset(x, trackTop),
                         end = Offset(x, trackTop + trackHeight * 0.3f),
                         strokeWidth = 2f
@@ -419,7 +437,7 @@ fun WeatherInfoCard(modifier: Modifier = Modifier, data: WeatherData) {
     Card(
         modifier = modifier.height(200.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box(
@@ -441,14 +459,14 @@ fun WeatherInfoCard(modifier: Modifier = Modifier, data: WeatherData) {
                     Text(
                         "Väderinformation",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "${data.temperatureCelsius}°C",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         "${data.precipitationChance}% risk för nederbörd",
@@ -470,7 +488,7 @@ fun ClothingAdviceCard(modifier: Modifier = Modifier, data: WeatherData) {
     Card(
         modifier = modifier.height(200.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box(
@@ -496,7 +514,7 @@ fun ClothingAdviceCard(modifier: Modifier = Modifier, data: WeatherData) {
                     Text(
                         "Klädråd",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(data.adviceIcon, fontSize = 48.sp)
