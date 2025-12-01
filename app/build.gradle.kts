@@ -78,6 +78,7 @@ dependencies {
     implementation(libs.androidx.material3)
 
     // Glance (för App Widgets)
+    implementation(libs.androidx.glance)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
 
