@@ -10,7 +10,7 @@ import java.util.Calendar
 
 class CalendarRepository(private val context: Context) {
 
-    fun getEventsForToday(): List<DayEvent> {
+    suspend fun getEventsForToday(): List<DayEvent> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val events = mutableListOf<DayEvent>()
         
         // Check permission first (simplified, assuming handled by caller or granted)
@@ -83,6 +83,6 @@ class CalendarRepository(private val context: Context) {
                 )
             }
         }
-        return events
+        events
     }
 }
