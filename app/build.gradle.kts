@@ -16,8 +16,15 @@ android {
         // minSdk 33 är ett bra val för moderna funktioner som Glance.
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+
+        val gitCommitCount = try {
+            "git rev-list --count HEAD".execute().trim().toInt()
+        } catch (e: Exception) {
+            1
+        }
+
+        versionCode = gitCommitCount
+        versionName = "1.0.$gitCommitCount"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -47,6 +54,8 @@ android {
     buildFeatures {
         // Aktiverar Jetpack Compose för modulen.
         compose = true
+        // Aktiverar BuildConfig för att kunna läsa versionsnamn
+        buildConfig = true
     }
 
     // TAS BORT: 'composeOptions' behövs inte längre när du använder 'kotlin.compose'-pluginen,
@@ -61,6 +70,8 @@ android {
         }
     }
 }
+
+fun String.execute(): String = Runtime.getRuntime().exec(this).inputStream.reader().readText()
 
 // Allt beroende (dependencies) ska ligga i ett enda block.
 dependencies {

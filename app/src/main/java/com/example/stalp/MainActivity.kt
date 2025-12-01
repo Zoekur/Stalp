@@ -17,8 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
+import com.example.stalp.ui.icons.StalpIcons
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import android.content.pm.PackageManager
 import androidx.compose.ui.unit.sp
 import com.example.stalp.data.DayEvent
 import com.example.stalp.data.WeatherData
@@ -190,7 +190,7 @@ fun LinearClockScreen(
                 onClick = onSettingsClick,
                 modifier = Modifier.align(Alignment.CenterEnd)
             ) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings")
+                Icon(StalpIcons.Settings, contentDescription = "Settings")
             }
         }
 
@@ -230,6 +230,15 @@ fun LinearClockScreen(
             // Klädrådsruta (Höger)
             ClothingAdviceCard(modifier = Modifier.weight(1f), data = weatherData)
         }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Version info
+        Text(
+            text = "v${BuildConfig.VERSION_NAME}",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.Gray.copy(alpha = 0.5f)
+        )
     }
 }
 
