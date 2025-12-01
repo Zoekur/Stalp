@@ -8,7 +8,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -58,10 +60,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.example.stalp.data.CalendarRepository
 import com.example.stalp.data.DayEvent
 import com.example.stalp.data.WeatherData
 import com.example.stalp.data.WeatherRepository
+import com.example.stalp.ui.MainViewModel
 import com.example.stalp.ui.icons.StalpIcons
 import com.example.stalp.ui.settings.SettingsScreen
 import com.example.stalp.ui.settings.ThemePreferences
@@ -77,6 +85,17 @@ import java.time.format.DateTimeFormatter
 
 // -------- HUVUDAKTIVITET --------
 class MainActivity : ComponentActivity() {
+
+    private val viewModel: MainViewModel by viewModels {
+        object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                val themePrefs = ThemePreferences(applicationContext)
+                @Suppress("UNCHECKED_CAST")
+                return MainViewModel(themePrefs) as T
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Enable Edge to Edge to draw behind system bars
@@ -85,26 +104,31 @@ class MainActivity : ComponentActivity() {
         // Schemalägger väder-workern att starta så snart appen öppnas
         WeatherWorker.schedule(applicationContext)
 
-        val appContext = applicationContext
-
         setContent {
-            val themeOption by ThemePreferences.themeOptionFlow(appContext)
+            val themeOption by viewModel.themeOptionFlow
                 .collectAsState(initial = ThemeOption.NordicCalm)
-            val scope = rememberCoroutineScope()
-            var showSettings by remember { mutableStateOf(false) }
 
-            StalpTheme(themeOption = themeOption) { // Återställt tema
+            StalpTheme(themeOption = themeOption) {
                 Surface(Modifier.fillMaxSize()) {
-                    if (showSettings) {
-                        SettingsScreen(onBack = { showSettings = false })
-                    } else {
-                        LinearClockScreen(
-                            themeOption = themeOption,
-                            onThemeOptionChange = { option ->
-                                scope.launch { ThemePreferences.setThemeOption(appContext, option) }
-                            },
-                            onSettingsClick = { showSettings = true }
-                        )
+                    val navController = rememberNavController()
+
+                    NavHost(navController = navController, startDestination = "home") {
+                        composable("home") {
+                            LinearClockScreen(
+                                themeOption = themeOption,
+                                onThemeOptionChange = { option ->
+                                    viewModel.onThemeOptionChange(option)
+                                },
+                                onSettingsClick = {
+                                    navController.navigate("settings")
+                                }
+                            )
+                        }
+                        composable("settings") {
+                            SettingsScreen(onBack = {
+                                navController.popBackStack()
+                            })
+                        }
                     }
                 }
             }
