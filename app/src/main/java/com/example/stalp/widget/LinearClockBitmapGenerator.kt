@@ -55,29 +55,7 @@ object LinearClockBitmapGenerator {
         val windowStartMinute = currentMinuteOfDay - (windowDurationMinutes / 2)
         val windowEndMinute = windowStartMinute + windowDurationMinutes
 
-        // 3. Draw Events
-        events.forEach { event ->
-            val eventStartMin = event.start.hour * 60 + event.start.minute
-            // Handle day wrapping for end time if needed, but assuming simple same-day events for now based on Repo
-            var eventEndMin = if (event.end != null) event.end.hour * 60 + event.end.minute else eventStartMin + 60
-
-            // If end is smaller than start, it might wrap to next day, or be an error.
-            // Simple fix: if end < start, assume next day (+24h)
-            if (eventEndMin < eventStartMin) eventEndMin += 24 * 60
-
-            // Check visibility
-            // We map event times to x-coordinates.
-            // x = (eventTime - windowStartMinute) / minutesPerPixel
-
-            val startX = (eventStartMin - windowStartMinute) / minutesPerPixel
-            val endX = (eventEndMin - windowStartMinute) / minutesPerPixel
-
-            // Only draw if visible
-            if (endX > 0 && startX < width) {
-                paint.color = event.color.toArgb()
-                canvas.drawRect(startX, 0f, endX, height.toFloat(), paint)
-            }
-        }
+        // 3. Draw Events (Removed as per request)
 
         // 4. Draw Hour Ticks and Text
         paint.color = colorBorder
