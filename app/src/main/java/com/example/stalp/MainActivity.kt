@@ -25,6 +25,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -220,6 +222,23 @@ fun LinearDayCard(
     events: List<DayEvent>,
     height: Dp = 80.dp
 ) {
+    val eventSegments = remember(events) {
+        events.map { e ->
+            val startFrac = fractionOfDay(e.start)
+            val endFracRaw = e.end?.let { fractionOfDay(it) } ?: startFrac
+            val endFrac = if (endFracRaw < startFrac) endFracRaw + 1.0f else endFracRaw
+            EventSegment(event = e, start = startFrac, end = endFrac)
+        }
+    }
+    val hourLabelPaint = remember {
+        Paint().apply {
+            textAlign = Paint.Align.CENTER
+            textSize = 24f
+            isAntiAlias = true
+        }
+    }
+    val hourLabelColor = MaterialTheme.colorScheme.onSurface.toArgb()
+    SideEffect { hourLabelPaint.color = hourLabelColor }
     val corner = 28.dp
     Box(
         Modifier
@@ -290,36 +309,24 @@ fun LinearDayCard(
                 val x = pad + trackWidth * (h / 24f)
                 val label =
                     if (h == 24) "24" else h.toString() // Ändrat till "24" istället för "24/00"
-                drawContext.canvas.nativeCanvas.apply {
-                    val paint = Paint().apply {
-                        color = android.graphics.Color.BLACK
-                        textAlign = Paint.Align.CENTER
-                        textSize = 24f
-                        isAntiAlias = true
-                    }
-                    drawText(label, x, trackTop + trackHeight / 2f + 8f, paint)
-                }
+                drawContext.canvas.nativeCanvas.drawText(
+                    label,
+                    x,
+                    trackTop + trackHeight / 2f + 8f,
+                    hourLabelPaint
+                )
             }
 
             // Event-segment (Lila händelser)
-            events.forEach { e ->
-                // Fixar wrap-around för midnatts-händelser
-                var startFrac = fractionOfDay(e.start)
-                var endFrac = e.end?.let { fractionOfDay(it) } ?: startFrac
-
-                // Hanterar händelser som går över midnatt
-                if (endFrac < startFrac) {
-                    endFrac += 1.0f // T.ex. 23:00 (0.95) till 01:00 (0.04) -> 0.04 + 1.0 = 1.04
-                }
-
-                val startX = pad + trackWidth * startFrac
-                val endX = pad + trackWidth * endFrac
+            eventSegments.forEach { segment ->
+                val startX = pad + trackWidth * segment.start
+                val endX = pad + trackWidth * segment.end
                 val w = max(endX - startX, trackWidth * 0.008f)
                 val segTop = trackTop + trackHeight * 0.08f
                 val segHeight = trackHeight * 0.84f
 
                 drawRoundRect(
-                    color = e.color,
+                    color = segment.event.color,
                     topLeft = Offset(startX, segTop),
                     size = Size(w, segHeight),
                     cornerRadius = CornerRadius(10f, 10f)
@@ -389,9 +396,10 @@ private fun EventLabelsOverlay(events: List<DayEvent>, height: Dp) {
 // -------- NÄSTA HÄNDELSE --------
 @Composable
 fun NextEventCard(events: List<DayEvent>, now: LocalTime) {
-    val next = remember(events, now) {
+    val sortedEvents = remember(events) { events.sortedBy { it.start } }
+    val next = remember(sortedEvents, now) {
         // Hitta nästa händelse som inte har passerat (minus 1 minut för att hantera tickern)
-        events.sortedBy { it.start }.firstOrNull { !it.start.isBefore(now.minusMinutes(1)) }
+        sortedEvents.firstOrNull { !it.start.isBefore(now.minusMinutes(1)) }
     } ?: return
 
     Row(
@@ -524,6 +532,8 @@ fun ClothingAdviceCard(modifier: Modifier = Modifier, data: WeatherData) {
 }
 
 // -------- HJÄLPARE --------
+private data class EventSegment(val event: DayEvent, val start: Float, val end: Float)
+
 private fun fractionOfDay(t: LocalTime): Float {
     val mins = t.hour * 60 + t.minute
     return mins / (24f * 60f)
