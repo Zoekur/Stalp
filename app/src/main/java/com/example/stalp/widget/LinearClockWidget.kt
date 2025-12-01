@@ -5,7 +5,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
-import androidx.datastore.preferences.core.Preferences
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.action.actionStartActivity
@@ -14,7 +13,6 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.PreferencesGlanceStateDefinition
-import androidx.glance.appwidget.state.currentState
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -27,11 +25,11 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.width
-import androidx.glance.text.FontWeight
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
+import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
@@ -41,7 +39,6 @@ import com.example.stalp.data.CalendarRepository
 import com.example.stalp.data.WeatherRepository
 import com.example.stalp.data.DayEvent
 import java.time.LocalTime
-import java.util.Calendar
 
 object LinearClockWidget : GlanceAppWidget() {
 
@@ -50,15 +47,12 @@ object LinearClockWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val weatherRepo = WeatherRepository(context)
         val calendarRepo = CalendarRepository(context)
-        
-        // Data loading inside provideContent creates a new subscription on every update
-        // but for Glance, update is infrequent.
-        // However, we need to call suspend function getEventsForToday.
+
+        // Hämta event (detta sker vid uppdatering)
         val events = calendarRepo.getEventsForToday()
 
         provideContent {
             val weatherData by weatherRepo.weatherDataFlow.collectAsState(initial = null)
-            
             LinearClockWidgetContent(weatherData, events)
         }
     }
@@ -71,13 +65,9 @@ private fun LinearClockWidgetContent(
 ) {
     val context = LocalContext.current
     val size = LocalSize.current
-    val colorBorder = ColorProvider(0xFF000000.toInt()) // Black border
+    val colorBorder = ColorProvider(0xFF000000.toInt())
 
-    // Calculate dimensions for bitmap
-    // Glance uses Dp, bitmap needs pixels.
-    // We can use a fixed density assumption or try to get display metrics,
-    // but typically widgets have standard sizes.
-    // Let's assume a reasonable width like 400-600px for clarity, or map from Dp.
+    // Enkel logik för px-beräkning (kan behöva justeras för exakt precision)
     val density = context.resources.displayMetrics.density
     val widthPx = (size.width.value * density).toInt().coerceAtLeast(300)
     val heightPx = (80 * density).toInt().coerceAtLeast(100)
@@ -89,8 +79,8 @@ private fun LinearClockWidgetContent(
             .padding(8.dp)
             .clickable(actionStartActivity<LinearClockConfigActivity>())
     ) {
-        
-        // 1. TOP SECTION: Linear Clock (Optimized Bitmap)
+
+        // 1. TOP SECTION: Klockan
         Box(
             GlanceModifier
                 .fillMaxWidth()
@@ -98,6 +88,7 @@ private fun LinearClockWidgetContent(
                 .background(colorBorder)
                 .padding(2.dp)
         ) {
+            // OBS: Se till att LinearClockBitmapGenerator finns!
             val bitmap = LinearClockBitmapGenerator.generate(
                 context = context,
                 width = widthPx,
@@ -112,63 +103,61 @@ private fun LinearClockWidgetContent(
                 modifier = GlanceModifier.fillMaxSize()
             )
         }
-        
+
         Spacer(GlanceModifier.height(8.dp))
-        
-        // 2. BOTTOM SECTION: Two Boxes (Weather Text Left, Clothing Visual Right)
+
+        // 2. BOTTOM SECTION
         Row(GlanceModifier.fillMaxWidth().height(120.dp)) {
-            
-            // 2.1 Weather Text Box (Left)
+
+            // 2.1 Weather Box
             Box(
                 GlanceModifier
-                    .defaultWeight(1f)
+                    .defaultWeight() // RÄTTAT: Inga argument här!
                     .fillMaxHeight()
                     .background(ColorProvider(0xFFFFFFFF.toInt()))
                     .cornerRadius(16.dp)
                     .padding(2.dp)
                     .background(colorBorder)
             ) {
-                 Column(
+                Column(
                     GlanceModifier
                         .fillMaxSize()
                         .padding(2.dp)
                         .background(ColorProvider(0xFFFFFFFF.toInt()))
                         .padding(8.dp),
-                    horizontalAlignment = Alignment.Start, // Align text to start
+                    horizontalAlignment = Alignment.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (weatherData != null && weatherData.isDataLoaded) {
-                         // Temperature
-                         Text(
-                             text = "${weatherData.temperatureCelsius}°C",
-                             style = TextStyle(fontSize = TextUnit(24.dp.value, TextUnitType.Sp), fontWeight = FontWeight.Bold)
-                         )
-                         Spacer(GlanceModifier.height(4.dp))
-                         // Advice Text
-                         Text(
-                             text = weatherData.adviceText,
-                             style = TextStyle(fontSize = TextUnit(12.dp.value, TextUnitType.Sp)),
-                             maxLines = 4
-                         )
+                        Text(
+                            text = "${weatherData.temperatureCelsius}°C",
+                            style = TextStyle(fontSize = TextUnit(24.dp.value, TextUnitType.Sp), fontWeight = FontWeight.Bold)
+                        )
+                        Spacer(GlanceModifier.height(4.dp))
+                        Text(
+                            text = weatherData.adviceText,
+                            style = TextStyle(fontSize = TextUnit(12.dp.value, TextUnitType.Sp)),
+                            maxLines = 4
+                        )
                     } else {
-                        Text("Laddar väder...")
+                        Text("Laddar...")
                     }
                 }
             }
-            
+
             Spacer(GlanceModifier.width(8.dp))
-            
-            // 2.2 Clothing Visual Box (Right)
+
+            // 2.2 Clothing Box
             Box(
                 GlanceModifier
-                    .defaultWeight(1f)
+                    .defaultWeight() // RÄTTAT: Inga argument här!
                     .fillMaxHeight()
                     .background(ColorProvider(0xFFFFFFFF.toInt()))
                     .cornerRadius(16.dp)
                     .padding(2.dp)
                     .background(colorBorder)
             ) {
-                 Column(
+                Column(
                     GlanceModifier
                         .fillMaxSize()
                         .padding(2.dp)
@@ -184,7 +173,7 @@ private fun LinearClockWidgetContent(
                             modifier = GlanceModifier.fillMaxSize()
                         )
                     } else {
-                         Text("Laddar...")
+                        Text("...")
                     }
                 }
             }
