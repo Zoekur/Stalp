@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
@@ -60,6 +61,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.NavHost
@@ -147,6 +150,7 @@ fun LinearClockScreen(
     val scope = rememberCoroutineScope()
     val weatherRepository = remember { WeatherRepository(context) }
     val calendarRepository = remember { CalendarRepository(context) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     // Samlar in väderdata från DataStore i realtid
     val weatherData by weatherRepository.weatherDataFlow.collectAsState(initial = WeatherData())
@@ -154,33 +158,54 @@ fun LinearClockScreen(
     // Events state
     var events by remember { mutableStateOf(emptyList<DayEvent>()) }
 
-    // Permission launcher
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted: Boolean ->
-            if (isGranted) {
-                scope.launch {
-                    events = calendarRepository.getEventsForToday()
-                }
-            }
-        }
-    )
-
-    // Check permission and fetch events
-    LaunchedEffect(Unit) {
+    // Funktion för att ladda events
+    fun loadEvents() {
         if (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.READ_CALENDAR
             ) == PackageManager.PERMISSION_GRANTED
         ) {
-            events = calendarRepository.getEventsForToday()
-        } else {
+            scope.launch {
+                events = calendarRepository.getEventsForToday()
+            }
+        }
+    }
+
+    // Permission launcher
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted: Boolean ->
+            if (isGranted) {
+                loadEvents()
+            }
+        }
+    )
+
+    // Lyssna på Lifecycle ON_RESUME för att uppdatera events om användaren ändrat kalendern
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                loadEvents()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // Initiera laddning vid start om permission finns, annars fråga
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_CALENDAR
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
             launcher.launch(Manifest.permission.READ_CALENDAR)
         }
     }
 
     val now by rememberTicker1s()
-    val timeLabel = now.format(DateTimeFormatter.ofPattern("HH:mm"))
 
     Column(
         Modifier
@@ -213,19 +238,19 @@ fun LinearClockScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Theme Selector (Optional placement)
+        // Theme Selector
         ThemeSelector(
             selectedOption = themeOption,
             onOptionSelected = onThemeOptionChange,
         )
 
-        Spacer(Modifier.height(24.dp)) // Increased spacing since clock is gone
+        Spacer(Modifier.height(24.dp))
 
         // 1. Tidslinjen (Huvudkomponenten) - Nu med dubbel höjd och hela dygnet
         LinearDayCard(
             now = now.toLocalTime(),
-            height = 168.dp, // Dubblat från 84.dp
-            events = events // Passar events till tidslinjen
+            height = 168.dp,
+            events = events
         )
 
         Spacer(Modifier.height(16.dp))
@@ -233,9 +258,9 @@ fun LinearClockScreen(
         // 2. Nästa Händelse (Tilläggsinformation)
         NextEventCard(events = events, now = now.toLocalTime())
 
-        Spacer(Modifier.height(24.dp)) // Mer utrymme innan korten
+        Spacer(Modifier.height(24.dp))
 
-        // 3. Väder- och Klädrådsrutor (Från din skiss)
+        // 3. Väder- och Klädrådsrutor
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -266,12 +291,12 @@ fun LinearClockScreen(
 fun LinearDayCard(
     now: LocalTime,
     height: Dp = 160.dp,
-    events: List<DayEvent> = emptyList() // Tog emot events
+    events: List<DayEvent> = emptyList()
 ) {
     val hourLabelPaint = remember {
         Paint().apply {
             textAlign = Paint.Align.CENTER
-            textSize = 36f // Större text
+            textSize = 36f
             isAntiAlias = true
             typeface = Typeface.DEFAULT_BOLD
         }
@@ -279,7 +304,7 @@ fun LinearDayCard(
     val hourLabelColor = MaterialTheme.colorScheme.onSurface.toArgb()
     SideEffect { hourLabelPaint.color = hourLabelColor }
 
-    val corner = 28.dp
+    val cornerRadiusDp = 28.dp
 
     // Theme colors
     val surfaceColor = MaterialTheme.colorScheme.surface
@@ -288,7 +313,6 @@ fun LinearDayCard(
     val tickColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
     val passedColor = Color(0xFFB7EA27)
     val nowColor = Color(0xFFEF4444)
-    val eventColor = Color(0xFFE0E0E0) // Ljusgrå för events på tidslinjen
 
     Box(
         Modifier
@@ -302,7 +326,7 @@ fun LinearDayCard(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .height(height)
-                .background(surfaceColor, RoundedCornerShape(corner))
+                .background(surfaceColor, RoundedCornerShape(cornerRadiusDp))
         )
 
         // Canvas för tidslinje (00 - 24)
@@ -313,25 +337,26 @@ fun LinearDayCard(
                 .height(height)
         ) {
             val pad = 20.dp.toPx()
-            val trackTop = size.height * 0.10f // Lite marginal i toppen
-            val trackHeight = size.height * 0.80f // Använd det mesta av höjden
+            val trackTop = size.height * 0.10f
+            val trackHeight = size.height * 0.80f
             val right = size.width - pad
             val trackWidth = right - pad
             val left = pad
+            val cornerRadiusPx = 24f
 
             // Inre kapsel (Bakgrund)
             drawRoundRect(
                 color = trackBgColor,
                 topLeft = Offset(left, trackTop),
                 size = Size(trackWidth, trackHeight),
-                cornerRadius = CornerRadius(24f, 24f)
+                cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
             )
 
             // Beräkna pixlar per minut för HELA dygnet (24h = 1440 min)
             val totalMinutes = 24 * 60
             val pxPerMin = trackWidth / totalMinutes
 
-            // Rita events (Som små markörer eller block i bakgrunden)
+            // Rita events
             events.forEach { event ->
                 val startMin = event.start.hour * 60 + event.start.minute
                 val endMin = (event.end?.hour ?: 0) * 60 + (event.end?.minute ?: 0)
@@ -344,7 +369,7 @@ fun LinearDayCard(
 
                 // Rita event som ett färgat block (svagt)
                 drawRect(
-                    color = event.color.copy(alpha = 0.3f), // Använd eventets färg, transparent
+                    color = event.color.copy(alpha = 0.3f),
                     topLeft = Offset(eventStartPx, trackTop),
                     size = Size(eventWidthPx, trackHeight)
                 )
@@ -361,12 +386,16 @@ fun LinearDayCard(
                     color = passedColor,
                     topLeft = Offset(left, trackTop),
                     size = Size(passedWidth, trackHeight),
-                    cornerRadius = CornerRadius(24f, 24f)
+                    cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
                 )
-                 if (passedWidth > 24f) {
+                 // Om "passed" är bredare än radiens kurva, rita en fyrkant över högra hörnen
+                 // för att få en skarp kant mot "framtiden" (eller behåll rundad om det är designen)
+                 // Här behåller vi den klippt vid 'currentX' men säkerställer att vi inte ritar utanför vänster kant.
+                 if (passedWidth > cornerRadiusPx) {
+                     // Fyll ut högra hörnen så det ser ut som progress bar som fortsätter
                      drawRect(
                          color = passedColor,
-                         topLeft = Offset(currentX - 10f, trackTop),
+                         topLeft = Offset(currentX - 10f, trackTop), // Lite överlapp
                          size = Size(10f, trackHeight)
                      )
                  }
@@ -378,7 +407,7 @@ fun LinearDayCard(
                 topLeft = Offset(left, trackTop),
                 size = Size(trackWidth, trackHeight),
                 style = Stroke(width = 2f),
-                cornerRadius = CornerRadius(24f, 24f)
+                cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
             )
 
             // Loopa igenom 24 timmar
@@ -390,7 +419,7 @@ fun LinearDayCard(
                 drawLine(
                     color = tickColor,
                     start = Offset(x, trackTop),
-                    end = Offset(x, trackTop + trackHeight * 0.4f), // 40% av höjden
+                    end = Offset(x, trackTop + trackHeight * 0.4f),
                     strokeWidth = 2f
                 )
 
@@ -400,7 +429,7 @@ fun LinearDayCard(
                     drawContext.canvas.nativeCanvas.drawText(
                         label,
                         x,
-                        trackTop + trackHeight / 2f + 18f, // Centrerat vertikalt ungefär
+                        trackTop + trackHeight / 2f + 18f,
                         hourLabelPaint
                     )
                 }
@@ -410,9 +439,9 @@ fun LinearDayCard(
                     val halfMin = min + 30
                     val halfX = left + (halfMin * pxPerMin)
                     drawLine(
-                        color = tickColor.copy(alpha = 0.3f), // Svagare
+                        color = tickColor.copy(alpha = 0.3f),
                         start = Offset(halfX, trackTop),
-                        end = Offset(halfX, trackTop + trackHeight * 0.2f), // Kortare (20%)
+                        end = Offset(halfX, trackTop + trackHeight * 0.2f),
                         strokeWidth = 2f
                     )
                 }
@@ -576,9 +605,9 @@ fun rememberTicker1s(): State<LocalDateTime> {
     val state = remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
-            // Använder 60 sekunder delay för att minska batterianvändningen
-            delay(60000)
+            // Uppdatera varje minut (eller oftare vid behov, men minut räcker för UI)
             state.value = LocalDateTime.now()
+            delay(60000)
         }
     }
     return state

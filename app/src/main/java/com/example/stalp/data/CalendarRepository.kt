@@ -4,46 +4,40 @@ import android.content.ContentUris
 import android.content.Context
 import android.provider.CalendarContract
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
-import java.util.Calendar
 
 class CalendarRepository(private val context: Context) {
 
     suspend fun getEventsForToday(): List<DayEvent> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         // Kontrollera behörighet först
         if (context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            // Returnera tom lista om vi inte har tillåtelse (använd inte 'return' här, bara sista raden)
-            emptyList<DayEvent>()
-        } else {
-            val events = mutableListOf<DayEvent>()
+            return@withContext emptyList<DayEvent>()
+        }
 
-            val projection = arrayOf(
-                CalendarContract.Instances.EVENT_ID,
-                CalendarContract.Instances.TITLE,
-                CalendarContract.Instances.BEGIN,
-                CalendarContract.Instances.END,
-                CalendarContract.Instances.DISPLAY_COLOR
-            )
+        val events = mutableListOf<DayEvent>()
 
-            // Sätt upp tid för "idag"
-            val startOfDay = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            val endOfDay = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 23)
-                set(Calendar.MINUTE, 59)
-                set(Calendar.SECOND, 59)
-                set(Calendar.MILLISECOND, 999)
-            }
+        val projection = arrayOf(
+            CalendarContract.Instances.EVENT_ID,
+            CalendarContract.Instances.TITLE,
+            CalendarContract.Instances.BEGIN,
+            CalendarContract.Instances.END,
+            CalendarContract.Instances.DISPLAY_COLOR
+        )
 
-            // Bygg query
-            val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
-            ContentUris.appendId(builder, startOfDay.timeInMillis)
-            ContentUris.appendId(builder, endOfDay.timeInMillis)
+        // Sätt upp tid för "idag" med java.time
+        val zoneId = ZoneId.systemDefault()
+        val today = LocalDate.now(zoneId)
+        val startOfDayMillis = today.atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val endOfDayMillis = today.atTime(LocalTime.MAX).atZone(zoneId).toInstant().toEpochMilli()
 
+        // Bygg query
+        val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
+        ContentUris.appendId(builder, startOfDayMillis)
+        ContentUris.appendId(builder, endOfDayMillis)
+
+        try {
             context.contentResolver.query(
                 builder.build(),
                 projection,
@@ -64,8 +58,8 @@ class CalendarRepository(private val context: Context) {
                     val end = cursor.getLong(endIdx)
                     val color = cursor.getInt(colorIdx)
 
-                    val startTime = Instant.ofEpochMilli(begin).atZone(ZoneId.systemDefault()).toLocalTime()
-                    val endTime = Instant.ofEpochMilli(end).atZone(ZoneId.systemDefault()).toLocalTime()
+                    val startTime = Instant.ofEpochMilli(begin).atZone(zoneId).toLocalTime()
+                    val endTime = Instant.ofEpochMilli(end).atZone(zoneId).toLocalTime()
 
                     events.add(
                         DayEvent(
@@ -78,7 +72,10 @@ class CalendarRepository(private val context: Context) {
                     )
                 }
             }
-            events
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Returnera tom lista eller logga fel vid problem
         }
+        events
     }
 }
