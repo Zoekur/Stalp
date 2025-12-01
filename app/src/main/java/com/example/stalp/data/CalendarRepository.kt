@@ -15,7 +15,7 @@ class CalendarRepository(private val context: Context) {
         
         // Check permission first (simplified, assuming handled by caller or granted)
         if (context.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            return emptyList()
+            return@withContext emptyList()
         }
 
         val projection = arrayOf(
