@@ -26,6 +26,7 @@ object LinearClockBitmapGenerator {
 
         // Colors
         val colorFuture = 0xFFFFFFFF.toInt() // White
+        val colorPassed = 0xFFB7EA27.toInt() // Green
         val colorRedLine = 0xFFEF4444.toInt() // Red
         val colorBorder = 0xFF000000.toInt() // Black
         val colorText = 0xFF000000.toInt()
@@ -35,9 +36,14 @@ object LinearClockBitmapGenerator {
             isAntiAlias = true
         }
 
-        // 1. Draw Background (Future)
+        // 1. Draw Background (Future - Right Side)
         paint.color = colorFuture
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+
+        // 2. Draw Passed Time (Green - Left Side)
+        // Since the widget is zoomed and centered on 'now', everything to the left is passed.
+        paint.color = colorPassed
+        canvas.drawRect(0f, 0f, width / 2f, height.toFloat(), paint)
 
         // Time Window Logic
         val zoomHours = 2
