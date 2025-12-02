@@ -28,6 +28,10 @@ object WeatherPreferencesKeys {
     val MANUAL_LOCATION_NAME = stringPreferencesKey("manual_location_name")
     val MANUAL_LAT = doublePreferencesKey("manual_lat")
     val MANUAL_LON = doublePreferencesKey("manual_lon")
+
+    // Used to store the last known location for the background worker
+    val SAVED_LAT = doublePreferencesKey("saved_lat")
+    val SAVED_LON = doublePreferencesKey("saved_lon")
 }
 
 data class WeatherData(
@@ -115,7 +119,17 @@ class WeatherRepository(private val context: Context) {
             if (!useCurrent) {
                 prefs[WeatherPreferencesKeys.MANUAL_LAT] = lat
                 prefs[WeatherPreferencesKeys.MANUAL_LON] = lon
+                // Also update saved coordinates for the worker
+                prefs[WeatherPreferencesKeys.SAVED_LAT] = lat
+                prefs[WeatherPreferencesKeys.SAVED_LON] = lon
             }
+        }
+    }
+
+    suspend fun saveCurrentLocationCoordinates(lat: Double, lon: Double) {
+        dataStore.edit { prefs ->
+            prefs[WeatherPreferencesKeys.SAVED_LAT] = lat
+            prefs[WeatherPreferencesKeys.SAVED_LON] = lon
         }
     }
 
