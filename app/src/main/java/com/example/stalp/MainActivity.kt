@@ -266,10 +266,10 @@ fun LinearClockScreen(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Väderinformationsruta (Vänster)
-            WeatherInfoCard(modifier = Modifier.weight(1f), data = weatherData)
+            WeatherInfoCard(modifier = Modifier.weight(1f), weather = weatherData)
 
             // Klädrådsruta (Höger)
-            ClothingAdviceCard(modifier = Modifier.weight(1f), data = weatherData)
+            ClothingAdviceCard(modifier = Modifier.weight(1f), weather = weatherData)
         }
 
         Spacer(Modifier.height(16.dp))
@@ -500,7 +500,7 @@ fun NextEventCard(events: List<DayEvent>, now: LocalTime) {
 // ----------------------------------------------------------
 
 @Composable
-fun WeatherInfoCard(modifier: Modifier = Modifier, data: WeatherData) {
+fun WeatherInfoCard(modifier: Modifier = Modifier, weather: WeatherData) {
     Card(
         modifier = modifier.height(200.dp),
         shape = RoundedCornerShape(12.dp),
@@ -513,7 +513,7 @@ fun WeatherInfoCard(modifier: Modifier = Modifier, data: WeatherData) {
                 .padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (!data.isDataLoaded) {
+            if (!weather.isDataLoaded) {
                 // Laddningsindikator
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(modifier = Modifier.size(32.dp))
@@ -524,19 +524,19 @@ fun WeatherInfoCard(modifier: Modifier = Modifier, data: WeatherData) {
                 // Visar riktig data
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        data.locationName,
+                        weather.locationName,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "${data.temperatureCelsius}°C",
+                        "${weather.temperatureCelsius}°C",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        "${data.precipitationChance}% risk för nederbörd",
+                        "${weather.precipitationChance}% risk för nederbörd",
                         fontSize = 16.sp,
                         color = Color.Gray
                     )
@@ -551,7 +551,7 @@ fun WeatherInfoCard(modifier: Modifier = Modifier, data: WeatherData) {
 // ----------------------------------------------------------
 
 @Composable
-fun ClothingAdviceCard(modifier: Modifier = Modifier, data: WeatherData) {
+fun ClothingAdviceCard(modifier: Modifier = Modifier, weather: WeatherData) {
     Card(
         modifier = modifier.height(200.dp),
         shape = RoundedCornerShape(12.dp),
@@ -564,12 +564,12 @@ fun ClothingAdviceCard(modifier: Modifier = Modifier, data: WeatherData) {
                 .padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (!data.isDataLoaded) {
+            if (!weather.isDataLoaded) {
                 // Laddningsindikator (synkroniserad med väderkortet)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(data.adviceIcon, fontSize = 48.sp)
+                    Text(weather.adviceIcon, fontSize = 48.sp)
                     Text(
-                        data.adviceText,
+                        weather.adviceText,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 8.dp)
@@ -584,9 +584,9 @@ fun ClothingAdviceCard(modifier: Modifier = Modifier, data: WeatherData) {
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text(data.adviceIcon, fontSize = 48.sp)
+                    Text(weather.adviceIcon, fontSize = 48.sp)
                     Text(
-                        data.adviceText,
+                        weather.adviceText,
                         fontSize = 12.sp,
                         color = Color.Gray,
                         textAlign = TextAlign.Center
