@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import com.example.stalp.data.GeocodingService
 import com.example.stalp.data.SearchResult
 import com.example.stalp.data.WeatherLocationSettings
+import com.example.stalp.data.WeatherProvider
 import com.example.stalp.data.WeatherRepository
 import com.example.stalp.ui.icons.StalpIcons
 import com.example.stalp.ui.theme.ThemeOption
@@ -34,11 +35,11 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val weatherRepository = remember { WeatherRepository(context) }
     val locationSettings by weatherRepository.locationSettingsFlow.collectAsState(initial = WeatherLocationSettings())
+    val selectedProvider by weatherRepository.providerFlow.collectAsState(initial = WeatherProvider.DEFAULT)
 
     // UI States
     var themeExpanded by remember { mutableStateOf(false) }
     var providerExpanded by remember { mutableStateOf(false) }
-    var selectedProvider by remember { mutableStateOf("Open-Meteo") }
 
     // Sök-states
     var searchQuery by remember { mutableStateOf("") }
@@ -46,7 +47,7 @@ fun SettingsScreen(
     var isSearching by remember { mutableStateOf(false) }
     var showSearchResults by remember { mutableStateOf(false) }
 
-    val providers = listOf("Open-Meteo", "SMHI", "Simulerad")
+    val providers = WeatherProvider.entries
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -125,7 +126,7 @@ fun SettingsScreen(
                 onExpandedChange = { providerExpanded = !providerExpanded }
             ) {
                 OutlinedTextField(
-                    value = selectedProvider,
+                    value = selectedProvider.displayName,
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Väderleverantör") },
@@ -137,7 +138,13 @@ fun SettingsScreen(
                     onDismissRequest = { providerExpanded = false }
                 ) {
                     providers.forEach { provider ->
-                        DropdownMenuItem(text = { Text(provider) }, onClick = { selectedProvider = provider; providerExpanded = false })
+                        DropdownMenuItem(
+                            text = { Text(provider.displayName) },
+                            onClick = {
+                                providerExpanded = false
+                                scope.launch { weatherRepository.saveProvider(provider) }
+                            }
+                        )
                     }
                 }
             }
