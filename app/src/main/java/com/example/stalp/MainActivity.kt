@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val themeOption by viewModel.themeOptionFlow.collectAsState(initial = ThemeOption.NordicCalm)
-            StalpTheme(themeOption = themeOption) {
+            StalpTheme(themeOption = themeOption, dynamicColorEnabled = false) {
                 Surface(Modifier.fillMaxSize()) {
                     val navController = rememberNavController()
                     NavHost(navController = navController, startDestination = "home") {
@@ -128,7 +128,20 @@ fun LinearClockScreen(onSettingsClick: () -> Unit) {
         onResult = { permissions ->
             if (permissions[Manifest.permission.READ_CALENDAR] == true) loadEvents()
             if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
-                scope.launch { weatherRepository.saveLocationSettings(true, locationSettings.manualLocationName) }
+                scope.launch {
+                    weatherRepository.saveLocationSettings(true, locationSettings.manualLocationName)
+                    try {
+                        val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+                        val location = locationManager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+                            ?: locationManager.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                        location?.let {
+                            weatherRepository.saveCurrentLocationCoordinates(it.latitude, it.longitude)
+                            WeatherWorker.refreshNow(context)
+                        }
+                    } catch (e: SecurityException) {
+                        e.printStackTrace()
+                    }
+                }
             }
         }
     )
@@ -149,6 +162,21 @@ fun LinearClockScreen(onSettingsClick: () -> Unit) {
         if (locationSettings.useCurrentLocation) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
+            } else {
+                // Permission already granted, ensure we update coordinates
+                // We use a separate LaunchedEffect for this side effect if permissions are already granted
+                LaunchedEffect(Unit) {
+                    try {
+                        val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+                        val location = locationManager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+                            ?: locationManager.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                        location?.let {
+                            weatherRepository.saveCurrentLocationCoordinates(it.latitude, it.longitude)
+                        }
+                    } catch (e: SecurityException) {
+                        e.printStackTrace()
+                    }
+                }
             }
         }
         if (permissionsToRequest.isNotEmpty()) permissionLauncher.launch(permissionsToRequest.toTypedArray())
