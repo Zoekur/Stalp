@@ -11,7 +11,9 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="Stalp"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Stalp">
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -21,9 +23,8 @@
             </intent-filter>
         </activity>
 
-
         <receiver
-            android:name=".widget.LinearClockWidgetReceiver"
+            android:name="com.example.stalp.widget.LinearClockWidgetReceiver"
             android:exported="true"
             android:label="@string/widget_name">
             <intent-filter>
@@ -49,6 +50,5 @@
         </receiver>
 
     </application>
-
 
 </manifest>

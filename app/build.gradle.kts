@@ -92,6 +92,11 @@ dependencies {
 	implementation(libs.androidx.ui.tooling.preview)
 	implementation(libs.androidx.material3)
 
+    // Add compose material icons (match your Compose version)
+    implementation("androidx.compose.material:material-icons-extended")
+    // Or for Material3 icon packs:
+    //implementation("androidx.compose.material3:material3-icons-extended")
+
 	// Glance (för App Widgets)
 	implementation(libs.androidx.glance)
 	implementation(libs.androidx.glance.appwidget)

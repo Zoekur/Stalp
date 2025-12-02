@@ -5,210 +5,252 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.stalp.data.GeocodingService
+import com.example.stalp.data.SearchResult
 import com.example.stalp.data.WeatherLocationSettings
 import com.example.stalp.data.WeatherRepository
 import com.example.stalp.ui.icons.StalpIcons
+import com.example.stalp.ui.theme.ThemeOption
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-	onBack: () -> Unit
+    currentTheme: ThemeOption,
+    onThemeSelected: (ThemeOption) -> Unit,
+    onBack: () -> Unit
 ) {
-	val context = LocalContext.current
-	val scope = rememberCoroutineScope()
-	val weatherRepository = remember { WeatherRepository(context) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val weatherRepository = remember { WeatherRepository(context) }
+    val locationSettings by weatherRepository.locationSettingsFlow.collectAsState(initial = WeatherLocationSettings())
 
-	val locationSettings by weatherRepository.locationSettingsFlow.collectAsState(initial = WeatherLocationSettings())
+    // UI States
+    var themeExpanded by remember { mutableStateOf(false) }
+    var providerExpanded by remember { mutableStateOf(false) }
+    var selectedProvider by remember { mutableStateOf("Open-Meteo") }
 
-	// Permission launcher
-	val locationPermissionLauncher = rememberLauncherForActivityResult(
-		contract = ActivityResultContracts.RequestMultiplePermissions(),
-		onResult = { permissions ->
-			val granted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
-					permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
-			if (granted) {
-				// If granted, we ensure the setting is set to true
-				scope.launch {
-					weatherRepository.saveLocationSettings(
-						true,
-						locationSettings.manualLocationName
-					)
-				}
-			} else {
-				// If denied, we might revert the toggle or just leave it.
-				// For better UX, we could show a snackbar, but let's stick to simple logic:
-				// If denied, we turn off "Use current location" to be consistent.
-				scope.launch {
-					weatherRepository.saveLocationSettings(
-						false,
-						locationSettings.manualLocationName
-					)
-				}
-			}
-		}
-	)
+    // Sök-states
+    var searchQuery by remember { mutableStateOf("") }
+    var searchResults by remember { mutableStateOf(emptyList<SearchResult>()) }
+    var isSearching by remember { mutableStateOf(false) }
+    var showSearchResults by remember { mutableStateOf(false) }
 
-	Scaffold(
-		topBar = {
-			TopAppBar(
-				title = { Text("Inställningar") },
-				navigationIcon = {
-					IconButton(onClick = onBack) {
-						Icon(StalpIcons.ArrowBack, contentDescription = "Back")
-					}
-				}
-			)
-		}
-	) { padding ->
-		Column(
-			modifier = Modifier
-				.fillMaxSize()
-				.padding(padding)
-				.padding(16.dp)
-		) {
-			Text("Väder", style = MaterialTheme.typography.titleMedium)
-			Spacer(modifier = Modifier.height(16.dp))
+    val providers = listOf("Open-Meteo", "SMHI", "Simulerad")
 
-			// Location Settings
-			Text("Plats", style = MaterialTheme.typography.titleSmall)
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+        onResult = { permissions ->
+            val granted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+                    permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
 
-			// Toggle for Current Location
-			Row(
-				modifier = Modifier
-					.fillMaxWidth()
-					.clickable {
-						val newValue = !locationSettings.useCurrentLocation
-						if (newValue) {
-							// Check permission before enabling
-							val hasPermission = ContextCompat.checkSelfPermission(
-								context,
-								Manifest.permission.ACCESS_COARSE_LOCATION
-							) == PackageManager.PERMISSION_GRANTED
-							if (hasPermission) {
-								scope.launch {
-									weatherRepository.saveLocationSettings(
-										true,
-										locationSettings.manualLocationName
-									)
-								}
-							} else {
-								locationPermissionLauncher.launch(
-									arrayOf(
-										Manifest.permission.ACCESS_COARSE_LOCATION,
-										Manifest.permission.ACCESS_FINE_LOCATION
-									)
-								)
-							}
-						} else {
-							scope.launch {
-								weatherRepository.saveLocationSettings(
-									false,
-									locationSettings.manualLocationName
-								)
-							}
-						}
-					}
-					.padding(vertical = 8.dp),
-				verticalAlignment = Alignment.CenterVertically
-			) {
-				Text(
-					text = "Använd nuvarande position",
-					modifier = Modifier.weight(1f),
-					style = MaterialTheme.typography.bodyMedium
-				)
-				Switch(
-					checked = locationSettings.useCurrentLocation,
-					onCheckedChange = { checked ->
-						if (checked) {
-							val hasPermission = ContextCompat.checkSelfPermission(
-								context,
-								Manifest.permission.ACCESS_COARSE_LOCATION
-							) == PackageManager.PERMISSION_GRANTED
-							if (hasPermission) {
-								scope.launch {
-									weatherRepository.saveLocationSettings(
-										true,
-										locationSettings.manualLocationName
-									)
-								}
-							} else {
-								locationPermissionLauncher.launch(
-									arrayOf(
-										Manifest.permission.ACCESS_COARSE_LOCATION,
-										Manifest.permission.ACCESS_FINE_LOCATION
-									)
-								)
-							}
-						} else {
-							scope.launch {
-								weatherRepository.saveLocationSettings(
-									false,
-									locationSettings.manualLocationName
-								)
-							}
-						}
-					}
-				)
-			}
+            // Om nekad, behåll GPS avstängd men krascha inte
+            val useGps = granted
 
-			// Manual Location Input (Visible if Current Location is OFF)
-			if (!locationSettings.useCurrentLocation) {
-				Spacer(modifier = Modifier.height(8.dp))
-				OutlinedTextField(
-					value = locationSettings.manualLocationName,
-					onValueChange = { newName ->
-						scope.launch {
-							weatherRepository.saveLocationSettings(false, newName)
-						}
-					},
-					label = { Text("Ange ort") },
-					modifier = Modifier.fillMaxWidth(),
-					singleLine = true
-				)
-			}
+            scope.launch {
+                // Skicka med lat/lon även här (nollställda eller gamla värden) för att matcha funktionen
+                weatherRepository.saveLocationSettings(
+                    useGps,
+                    locationSettings.manualLocationName,
+                    locationSettings.manualLat,
+                    locationSettings.manualLon
+                )
+            }
+        }
+    )
 
-			Spacer(modifier = Modifier.height(24.dp))
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Inställningar") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(StalpIcons.ArrowBack, contentDescription = "Tillbaka")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+        ) {
+            // --- UTSEENDE ---
+            Text("Utseende", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(8.dp))
 
-			// Provider Info
-			Text(
-				"Väderleverantör: Open-Meteo (Standard)",
-				style = MaterialTheme.typography.bodySmall,
-				color = MaterialTheme.colorScheme.onSurfaceVariant
-			)
+            ExposedDropdownMenuBox(
+                expanded = themeExpanded,
+                onExpandedChange = { themeExpanded = !themeExpanded }
+            ) {
+                OutlinedTextField(
+                    value = currentTheme.displayName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Tema") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = themeExpanded) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = themeExpanded,
+                    onDismissRequest = { themeExpanded = false }
+                ) {
+                    ThemeOption.values().forEach { option ->
+                        DropdownMenuItem(text = { Text(option.displayName) }, onClick = { onThemeSelected(option); themeExpanded = false })
+                    }
+                }
+            }
 
-			Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-			Text("Kalender", style = MaterialTheme.typography.titleMedium)
-			Spacer(modifier = Modifier.height(8.dp))
-			// Placeholder for Calendar Selection
-			Text("Kalenderkälla: Enhetskalender", style = MaterialTheme.typography.bodyMedium)
-		}
-	}
+            // --- VÄDER & PLATS ---
+            Text("Väder & Plats", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Väderleverantör
+            ExposedDropdownMenuBox(
+                expanded = providerExpanded,
+                onExpandedChange = { providerExpanded = !providerExpanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedProvider,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Väderleverantör") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = providerExpanded,
+                    onDismissRequest = { providerExpanded = false }
+                ) {
+                    providers.forEach { provider ->
+                        DropdownMenuItem(text = { Text(provider) }, onClick = { selectedProvider = provider; providerExpanded = false })
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Plats Toggle (GPS)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        val newValue = !locationSettings.useCurrentLocation
+                        if (newValue) {
+                            // Vill aktivera GPS
+                            val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                            if (hasPermission) {
+                                scope.launch {
+                                    weatherRepository.saveLocationSettings(true, locationSettings.manualLocationName, locationSettings.manualLat, locationSettings.manualLon)
+                                }
+                            } else {
+                                locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION))
+                            }
+                        } else {
+                            // Avaktivera GPS
+                            scope.launch {
+                                weatherRepository.saveLocationSettings(false, locationSettings.manualLocationName, locationSettings.manualLat, locationSettings.manualLon)
+                            }
+                        }
+                    }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Använd nuvarande position", style = MaterialTheme.typography.bodyLarge)
+                    Text("Hämtar väder för din exakta position", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = locationSettings.useCurrentLocation, onCheckedChange = null)
+            }
+
+            // --- SÖK PLATS (Om GPS är av) ---
+            if (!locationSettings.useCurrentLocation) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Vald plats: ${locationSettings.manualLocationName}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { query ->
+                        searchQuery = query
+                        if (query.length > 2) {
+                            scope.launch {
+                                isSearching = true
+                                searchResults = GeocodingService.searchCity(query)
+                                isSearching = false
+                                showSearchResults = true
+                            }
+                        } else {
+                            showSearchResults = false
+                        }
+                    },
+                    label = { Text("Sök stad (t.ex. Umeå)") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (isSearching) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                if (showSearchResults && searchResults.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                            .heightIn(max = 200.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Column {
+                            searchResults.forEach { result ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(result.name, style = MaterialTheme.typography.bodyLarge)
+                                            Text(result.country, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    },
+                                    onClick = {
+                                        scope.launch {
+                                            weatherRepository.saveLocationSettings(
+                                                useCurrent = false,
+                                                manualName = result.name,
+                                                lat = result.lat,
+                                                lon = result.lon
+                                            )
+                                            searchQuery = ""
+                                            showSearchResults = false
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                } else if (showSearchResults && searchQuery.length > 2 && !isSearching) {
+                    Text("Inga platser hittades.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        }
+    }
 }

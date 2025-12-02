@@ -12,49 +12,26 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -65,12 +42,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.stalp.data.CalendarRepository
 import com.example.stalp.data.DayEvent
 import com.example.stalp.data.WeatherData
+import com.example.stalp.data.WeatherLocationSettings
 import com.example.stalp.data.WeatherRepository
 import com.example.stalp.ui.MainViewModel
 import com.example.stalp.ui.icons.StalpIcons
@@ -78,7 +57,6 @@ import com.example.stalp.ui.settings.SettingsScreen
 import com.example.stalp.ui.settings.ThemePreferences
 import com.example.stalp.ui.theme.StalpTheme
 import com.example.stalp.ui.theme.ThemeOption
-import com.example.stalp.ui.theme.ThemeSelector
 import com.example.stalp.workers.WeatherWorker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -86,9 +64,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-// -------- HUVUDAKTIVITET --------
 class MainActivity : ComponentActivity() {
-
     private val viewModel: MainViewModel by viewModels {
         object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -101,36 +77,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Enable Edge to Edge to draw behind system bars
         enableEdgeToEdge()
-
-        // Schemalägger väder-workern att starta så snart appen öppnas
         WeatherWorker.schedule(applicationContext)
 
         setContent {
-            val themeOption by viewModel.themeOptionFlow
-                .collectAsState(initial = ThemeOption.NordicCalm)
-
+            val themeOption by viewModel.themeOptionFlow.collectAsState(initial = ThemeOption.NordicCalm)
             StalpTheme(themeOption = themeOption) {
                 Surface(Modifier.fillMaxSize()) {
                     val navController = rememberNavController()
-
                     NavHost(navController = navController, startDestination = "home") {
                         composable("home") {
                             LinearClockScreen(
-                                themeOption = themeOption,
-                                onThemeOptionChange = { option ->
-                                    viewModel.onThemeOptionChange(option)
-                                },
-                                onSettingsClick = {
-                                    navController.navigate("settings")
-                                }
+                                onSettingsClick = { navController.navigate("settings") }
                             )
                         }
                         composable("settings") {
-                            SettingsScreen(onBack = {
-                                navController.popBackStack()
-                            })
+                            SettingsScreen(
+                                currentTheme = themeOption,
+                                onThemeSelected = { newTheme -> viewModel.onThemeOptionChange(newTheme) },
+                                onBack = { navController.popBackStack() }
+                            )
                         }
                     }
                 }
@@ -139,70 +105,53 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// -------- SKÄRM (Kombinerar tidslinje & kort) --------
 @Composable
-fun LinearClockScreen(
-    themeOption: ThemeOption,
-    onThemeOptionChange: (ThemeOption) -> Unit,
-    onSettingsClick: () -> Unit
-) {
+fun LinearClockScreen(onSettingsClick: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val weatherRepository = remember { WeatherRepository(context) }
     val calendarRepository = remember { CalendarRepository(context) }
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Samlar in väderdata från DataStore i realtid
     val weatherData by weatherRepository.weatherDataFlow.collectAsState(initial = WeatherData())
-
-    // Events state
+    val locationSettings by weatherRepository.locationSettingsFlow.collectAsState(initial = WeatherLocationSettings())
     var events by remember { mutableStateOf(emptyList<DayEvent>()) }
 
-    // Funktion för att ladda events
     fun loadEvents() {
-        if (ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_CALENDAR
-            ) == PackageManager.PERMISSION_GRANTED
-        ) {
-            scope.launch {
-                events = calendarRepository.getEventsForToday()
-            }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED) {
+            scope.launch { events = calendarRepository.getEventsForToday() }
         }
     }
 
-    // Permission launcher
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted: Boolean ->
-            if (isGranted) {
-                loadEvents()
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+        onResult = { permissions ->
+            if (permissions[Manifest.permission.READ_CALENDAR] == true) loadEvents()
+            if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
+                scope.launch { weatherRepository.saveLocationSettings(true, locationSettings.manualLocationName) }
             }
         }
     )
 
-    // Lyssna på Lifecycle ON_RESUME för att uppdatera events om användaren ändrat kalendern
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                loadEvents()
-            }
-        }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) loadEvents() }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Initiera laddning vid start om permission finns, annars fråga
     LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_CALENDAR
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            launcher.launch(Manifest.permission.READ_CALENDAR)
+        val permissionsToRequest = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.READ_CALENDAR)
+        } else {
+            loadEvents()
         }
+        if (locationSettings.useCurrentLocation) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+        }
+        if (permissionsToRequest.isNotEmpty()) permissionLauncher.launch(permissionsToRequest.toTypedArray())
     }
 
     val now by rememberTicker1s()
@@ -210,405 +159,153 @@ fun LinearClockScreen(
     Column(
         Modifier
             .fillMaxSize()
-            .systemBarsPadding() // Fixar "black bar" problemet genom att undvika system bars
+            .systemBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // TOP HEADER: Title (Left) + Settings (Right)
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Stalp",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                fontSize = 24.sp
-            )
-
+            Text("Stalp", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, fontSize = 24.sp)
             IconButton(onClick = onSettingsClick) {
-                Icon(
-                    imageVector = StalpIcons.Settings,
-                    contentDescription = "Settings",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+                Icon(StalpIcons.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurface)
             }
         }
 
-        Spacer(Modifier.height(8.dp))
-
-        // Theme Selector
-        ThemeSelector(
-            selectedOption = themeOption,
-            onOptionSelected = onThemeOptionChange,
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        // 1. Tidslinjen (Huvudkomponenten) - Nu med dubbel höjd och hela dygnet
-        LinearDayCard(
-            now = now.toLocalTime(),
-            height = 168.dp,
-            events = events
-        )
-
+        Spacer(Modifier.height(32.dp))
+        LinearDayCard(now = now.toLocalTime(), height = 168.dp, events = events)
         Spacer(Modifier.height(16.dp))
-
-        // 2. Nästa Händelse (Tilläggsinformation)
         NextEventCard(events = events, now = now.toLocalTime())
-
         Spacer(Modifier.height(24.dp))
 
-        // 3. Väder- och Klädrådsrutor
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Väderinformationsruta (Vänster)
-            WeatherInfoCard(modifier = Modifier.weight(1f), weather = weatherData)
-
-            // Klädrådsruta (Höger)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            WeatherInfoCard(modifier = Modifier.weight(1f), weather = weatherData, onRefresh = { WeatherWorker.refreshNow(context) })
             ClothingAdviceCard(modifier = Modifier.weight(1f), weather = weatherData)
         }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Version info
-        Text(
-            text = "v${BuildConfig.VERSION_NAME}",
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.Gray.copy(alpha = 0.5f)
-        )
     }
 }
 
-// ----------------------------------------------------------
-// 1. TIDSLINJE KOMPONENTER
-// ----------------------------------------------------------
-
 @Composable
-fun LinearDayCard(
-    now: LocalTime,
-    height: Dp = 160.dp,
-    events: List<DayEvent> = emptyList()
-) {
-    val hourLabelPaint = remember {
-        Paint().apply {
-            textAlign = Paint.Align.CENTER
-            textSize = 54f
-            isAntiAlias = true
-            typeface = Typeface.DEFAULT_BOLD
-        }
-    }
-    val hourLabelColor = MaterialTheme.colorScheme.onSurface.toArgb()
-    SideEffect { hourLabelPaint.color = hourLabelColor }
+fun LinearDayCard(now: LocalTime, height: Dp = 160.dp, events: List<DayEvent> = emptyList()) {
+    // VIKTIGT: Svart färg på texten för att garantera att den syns mot ljus bakgrund
+    val hourLabelPaint = remember { Paint().apply { textAlign = Paint.Align.CENTER; textSize = 54f; isAntiAlias = true; typeface = Typeface.DEFAULT_BOLD; color = android.graphics.Color.BLACK } }
 
-    val cornerRadiusDp = 28.dp
-
-    // Theme colors
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val trackBgColor = MaterialTheme.colorScheme.surfaceVariant
-    val borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-    val tickColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-    val passedColor = Color(0xFFB7EA27)
+    val dayGradient = Brush.horizontalGradient(listOf(Color(0xFFFFE082), Color(0xFF81C784), Color(0xFF4FC3F7), Color(0xFF5E35B1)))
+    // Bakgrunden är vit/ljusgrå
+    val surfaceColor = Color(0xFFF0F0F0)
+    val trackBgColor = Color(0xFFE0E0E0)
+    // Svarta linjer för kontrast
+    val borderColor = Color.Black.copy(alpha = 0.5f)
+    val tickColor = Color.Black.copy(alpha = 0.7f)
     val nowColor = Color(0xFFEF4444)
 
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(height + 24.dp)
-            .background(Color.Transparent)
-    ) {
-        // Yttre kapsel (Bakgrund)
-        Box(
-            Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(height)
-                .background(surfaceColor, RoundedCornerShape(cornerRadiusDp))
-        )
+    Box(Modifier.fillMaxWidth().height(height + 24.dp)) {
+        Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(height).background(surfaceColor, RoundedCornerShape(28.dp)))
 
-        // Canvas för tidslinje (00 - 24)
-        Canvas(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(height)
-        ) {
+        Canvas(modifier = Modifier.align(Alignment.TopCenter).fillMaxSize()) { // FillMaxSize för att täcka boxen
             val pad = 20.dp.toPx()
-            val trackTop = size.height * 0.10f
             val trackHeight = size.height * 0.80f
-            val right = size.width - pad
-            val trackWidth = right - pad
-            val left = pad
-            val cornerRadiusPx = 24f
+            val trackWidth = size.width - (pad * 2)
+            val pxPerMin = trackWidth / (24 * 60)
+            val trackTop = size.height * 0.10f
 
-            // Inre kapsel (Bakgrund)
-            drawRoundRect(
-                color = trackBgColor,
-                topLeft = Offset(left, trackTop),
-                size = Size(trackWidth, trackHeight),
-                cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
-            )
+            // Rita bakgrundsspåret
+            drawRoundRect(trackBgColor, Offset(pad, trackTop), Size(trackWidth, trackHeight), CornerRadius(24f, 24f))
 
-            // Beräkna pixlar per minut för HELA dygnet (24h = 1440 min)
-            val totalMinutes = 24 * 60
-            val pxPerMin = trackWidth / totalMinutes
-
-            // Rita events
+            // Rita Events
             events.forEach { event ->
-                val startMin = event.start.hour * 60 + event.start.minute
-                val endMin = (event.end?.hour ?: 0) * 60 + (event.end?.minute ?: 0)
-
-                // Enkel hantering av events som går över midnatt eller saknar slut -> visa 1h
-                val actualEndMin = if (event.end != null && endMin > startMin) endMin else startMin + 60
-
-                val eventStartPx = left + (startMin * pxPerMin)
-                val eventWidthPx = (actualEndMin - startMin) * pxPerMin
-
-                // Rita event som ett färgat block (svagt)
-                drawRect(
-                    color = event.color.copy(alpha = 0.3f),
-                    topLeft = Offset(eventStartPx, trackTop),
-                    size = Size(eventWidthPx, trackHeight)
-                )
+                val startPx = pad + ((event.start.hour * 60 + event.start.minute) * pxPerMin)
+                val widthPx = ((if (event.end != null && event.end.isAfter(event.start)) (event.end.hour * 60 + event.end.minute) else (event.start.hour * 60 + event.start.minute + 60)) - (event.start.hour * 60 + event.start.minute)) * pxPerMin
+                drawRect(event.color.copy(alpha = 0.3f), Offset(startPx, trackTop), Size(widthPx, trackHeight))
             }
 
-            // Nuvarande tid i minuter
-            val currentMinutes = now.hour * 60 + now.minute
-            val currentX = left + (currentMinutes * pxPerMin)
-
-            // Grön fyllnad (Från 00:00 till nu)
-            val passedWidth = currentX - left
-            if (passedWidth > 0) {
-                 drawRoundRect(
-                    color = passedColor,
-                    topLeft = Offset(left, trackTop),
-                    size = Size(passedWidth, trackHeight),
-                    cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
-                )
-                 // Om "passed" är bredare än radiens kurva, rita en fyrkant över högra hörnen
-                 // för att få en skarp kant mot "framtiden" (eller behåll rundad om det är designen)
-                 // Här behåller vi den klippt vid 'currentX' men säkerställer att vi inte ritar utanför vänster kant.
-                 if (passedWidth > cornerRadiusPx) {
-                     // Fyll ut högra hörnen så det ser ut som progress bar som fortsätter
-                     drawRect(
-                         color = passedColor,
-                         topLeft = Offset(currentX - 10f, trackTop), // Lite överlapp
-                         size = Size(10f, trackHeight)
-                     )
-                 }
+            // Rita passerad tid (Gradient)
+            val currentX = pad + ((now.hour * 60 + now.minute) * pxPerMin)
+            if (currentX > pad) {
+                drawRoundRect(dayGradient, Offset(pad, trackTop), Size(currentX - pad, trackHeight), CornerRadius(24f, 24f))
             }
 
-            // Inre kapsel (Border - ritas ovanpå för snyggare kant)
-            drawRoundRect(
-                color = borderColor,
-                topLeft = Offset(left, trackTop),
-                size = Size(trackWidth, trackHeight),
-                style = Stroke(width = 2f),
-                cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
-            )
+            // Ram
+            drawRoundRect(borderColor, Offset(pad, trackTop), Size(trackWidth, trackHeight), CornerRadius(24f, 24f), Stroke(2f))
 
-            // Loopa igenom 24 timmar
+            // Linjer och text
             for (h in 0..24) {
-                val min = h * 60
-                val x = left + (min * pxPerMin)
-
-                // Rita Tim-markering (långt streck)
-                drawLine(
-                    color = tickColor,
-                    start = Offset(x, trackTop),
-                    end = Offset(x, trackTop + trackHeight * 0.4f),
-                    strokeWidth = 2f
-                )
-
-                // Text: Endast för 6, 12, 18, 24
-                if (h % 6 == 0 && h != 0) {
-                    val label = h.toString()
-                    drawContext.canvas.nativeCanvas.drawText(
-                        label,
-                        x,
-                        trackTop + trackHeight / 2f + 18f,
-                        hourLabelPaint
-                    )
-                }
-
-                // Halvtimmar (korta streck) - men inte efter 24
-                if (h < 24) {
-                    val halfMin = min + 30
-                    val halfX = left + (halfMin * pxPerMin)
-                    drawLine(
-                        color = tickColor.copy(alpha = 0.3f),
-                        start = Offset(halfX, trackTop),
-                        end = Offset(halfX, trackTop + trackHeight * 0.2f),
-                        strokeWidth = 2f
-                    )
+                val x = pad + (h * 60 * pxPerMin)
+                drawLine(tickColor, Offset(x, trackTop), Offset(x, trackTop + trackHeight * 0.4f), 2f)
+                if (h % 6 == 0 && h != 0 && h != 24) {
+                    drawContext.canvas.nativeCanvas.drawText(h.toString(), x, trackTop + trackHeight / 2f + 18f, hourLabelPaint)
                 }
             }
-
-            // Nu-markör (röd linje)
-            drawLine(
-                color = nowColor,
-                start = Offset(currentX, trackTop),
-                end = Offset(currentX, trackTop + trackHeight),
-                strokeWidth = 4f,
-                cap = StrokeCap.Square
-            )
+            // Nu-linjen
+            drawLine(nowColor, Offset(currentX, trackTop), Offset(currentX, trackTop + trackHeight), 4f, StrokeCap.Square)
         }
     }
 }
 
-// -------- NÄSTA HÄNDELSE --------
 @Composable
 fun NextEventCard(events: List<DayEvent>, now: LocalTime) {
-    val sortedEvents = remember(events) { events.sortedBy { it.start } }
-    val next = remember(sortedEvents, now) {
-        // Hitta nästa händelse som inte har passerat (minus 1 minut för att hantera tickern)
-        sortedEvents.firstOrNull { !it.start.isBefore(now.minusMinutes(1)) }
-    } ?: return
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(Color(0xFFF7F7F7), RoundedCornerShape(16.dp))
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(next.icon ?: "•", fontSize = 22.sp, modifier = Modifier.padding(end = 8.dp))
+    val next = events.sortedBy { it.start }.firstOrNull { !it.start.isBefore(now.minusMinutes(1)) } ?: return
+    Row(Modifier.fillMaxWidth().background(Color(0xFF808080), RoundedCornerShape(16.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(next.icon ?: "•", fontSize = 22.sp, modifier = Modifier.padding(end = 8.dp), color = Color.Black)
         Column {
-            Text(next.title, fontSize = 18.sp, fontWeight = FontWeight.Medium)
-            Text(
-                text = "${next.start.format(DateTimeFormatter.ofPattern("HH:mm"))}${
-                    next.end?.let {
-                        " – ${
-                            it.format(
-                                DateTimeFormatter.ofPattern("HH:mm")
-                            )
-                        }"
-                    } ?: ""
-                }",
-                color = Color(0xFF6B7280),
-                fontSize = 14.sp
-            )
+            Text(next.title, fontSize = 18.sp, fontWeight = FontWeight.Medium, color = Color.Black)
+            Text("${next.start.format(DateTimeFormatter.ofPattern("HH:mm"))}${next.end?.let { " – ${it.format(DateTimeFormatter.ofPattern("HH:mm"))}" } ?: ""}", color = Color(0xFF6B7280), fontSize = 14.sp)
         }
     }
 }
 
-// ----------------------------------------------------------
-// 2. VÄDER-KOMPONENT (Uppdaterad för att ta emot data)
-// ----------------------------------------------------------
-
 @Composable
-fun WeatherInfoCard(modifier: Modifier = Modifier, weather: WeatherData) {
-    Card(
-        modifier = modifier.height(200.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            if (!weather.isDataLoaded) {
-                // Laddningsindikator
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+fun WeatherInfoCard(modifier: Modifier = Modifier, weather: WeatherData, onRefresh: () -> Unit) {
+    Card(modifier = modifier.height(200.dp), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(4.dp)) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            IconButton(onClick = onRefresh, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {
+                Icon(Icons.Default.Refresh, contentDescription = "Uppdatera", tint = Color.Black)
+            }
+            Column(modifier = Modifier.align(Alignment.Center).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                if (!weather.isDataLoaded) {
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Color.Black)
                     Spacer(Modifier.height(8.dp))
-                    Text("Laddar väderdata...", fontSize = 14.sp, color = Color.Gray)
-                }
-            } else {
-                // Visar riktig data
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        weather.locationName,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Text("Laddar...", fontSize = 14.sp, color = Color.Gray)
+                } else {
+                    Text(weather.locationName, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, color = Color.Black)
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        "${weather.temperatureCelsius}°C",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        "${weather.precipitationChance}% risk för nederbörd",
-                        fontSize = 16.sp,
-                        color = Color.Gray
-                    )
+                    Text("${weather.temperatureCelsius}°C", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                    Text("${weather.precipitationChance}% risk", fontSize = 16.sp, color = Color.Gray, textAlign = TextAlign.Center)
                 }
             }
         }
     }
 }
-
-// ----------------------------------------------------------
-// 3. KLÄDRÅDS-KOMPONENT (Uppdaterad för att ta emot data)
-// ----------------------------------------------------------
 
 @Composable
 fun ClothingAdviceCard(modifier: Modifier = Modifier, weather: WeatherData) {
-    Card(
-        modifier = modifier.height(200.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
+    Card(modifier = modifier.height(200.dp), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(4.dp)) {
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
             if (!weather.isDataLoaded) {
-                // Laddningsindikator (synkroniserad med väderkortet)
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(weather.adviceIcon, fontSize = 48.sp)
-                    Text(
-                        weather.adviceText,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
+                Text("...", fontSize = 24.sp, color = Color.Black)
             } else {
-                // Visar klädråd baserat på logik i WeatherRepository
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "Klädråd",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                    Text("Klädråd", style = MaterialTheme.typography.titleMedium, color = Color.Black)
+                    Spacer(Modifier.height(16.dp))
+                    // HÄR ÄR BILDEN TILLBAKA!
+                    Image(
+                        painter = painterResource(id = weather.getClothingResourceId()),
+                        contentDescription = "Kläder",
+                        modifier = Modifier.size(80.dp)
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text(weather.adviceIcon, fontSize = 48.sp)
-                    Text(
-                        weather.adviceText,
-                        fontSize = 12.sp,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center
-                    )
+                    Text(weather.adviceText, fontSize = 12.sp, color = Color.Gray, textAlign = TextAlign.Center)
                 }
             }
         }
     }
 }
 
-// -------- HJÄLPARE --------
-
-// -------- ENKEL TICKER --------
 @Composable
 fun rememberTicker1s(): State<LocalDateTime> {
     val state = remember { mutableStateOf(LocalDateTime.now()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            // Uppdatera varje minut (eller oftare vid behov, men minut räcker för UI)
-            state.value = LocalDateTime.now()
-            delay(60000)
-        }
-    }
+    LaunchedEffect(Unit) { while (true) { state.value = LocalDateTime.now(); delay(60000) } }
     return state
 }

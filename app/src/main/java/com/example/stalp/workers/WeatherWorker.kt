@@ -1,41 +1,42 @@
 package com.example.stalp.workers
 
 import android.content.Context
-import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.work.*
 import androidx.work.CoroutineWorker
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder // Denna saknades troligen eller användes fel
-import androidx.work.WorkManager
-import androidx.work.WorkerParameters
 import com.example.stalp.data.WeatherRepository
-import com.example.stalp.widget.LinearClockWidget
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
-class WeatherWorker(
-    private val context: Context,
-    workerParams: WorkerParameters
-) : CoroutineWorker(context, workerParams) {
+object WeatherWorker {
+    private const val UNIQUE_WORK_NAME = "stalp_weather_refresh"
 
+    fun schedule(context: Context) {
+        val work = PeriodicWorkRequestBuilder<RefreshWeatherWorker>(6, TimeUnit.HOURS)
+            .setInitialDelay(0, TimeUnit.MINUTES)
+            .build()
+
+        WorkManager.getInstance(context)
+            .enqueueUniquePeriodicWork(UNIQUE_WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, work)
+    }
+
+    fun refreshNow(context: Context) {
+        val one = OneTimeWorkRequestBuilder<RefreshWeatherWorker>().build()
+        WorkManager.getInstance(context).enqueue(one)
+    }
+}
+
+class RefreshWeatherWorker(appContext: Context, workerParams: WorkerParameters) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            // Hämta/Simulera data
-            val temp = (-10..35).random()
-            val precipChance = (0..100).random()
+            val repo = WeatherRepository(applicationContext)
+            // Simple mock/fallback data. In a real app you'd call a network API here.
+            val temp = Random.nextInt(0, 31)
+            val precip = Random.nextInt(0, 101)
+            val location = "Plats"
 
-            // Spara till repository
-            val repository = WeatherRepository(context)
-            repository.saveWeatherData(temp, precipChance)
-
-            // Uppdatera widgeten
-            val manager = GlanceAppWidgetManager(context)
-            val glanceIds = manager.getGlanceIds(LinearClockWidget::class.java)
-
-            glanceIds.forEach { glanceId ->
-                LinearClockWidget.update(context, glanceId)
-            }
+            repo.saveWeatherData(temp, precip, location)
 
             Result.success()
         } catch (e: Exception) {
@@ -43,21 +44,5 @@ class WeatherWorker(
             Result.retry()
         }
     }
-
-    companion object {
-        private const val WORK_NAME = "weather_fetch_worker_main"
-
-        fun schedule(context: Context) {
-            // Korrekt användning av PeriodicWorkRequestBuilder
-            val req = PeriodicWorkRequestBuilder<WeatherWorker>(1, TimeUnit.HOURS)
-                .build()
-
-            WorkManager.getInstance(context)
-                .enqueueUniquePeriodicWork(
-                    WORK_NAME,
-                    ExistingPeriodicWorkPolicy.UPDATE,
-                    req
-                )
-        }
-    }
 }
+
