@@ -296,7 +296,7 @@ fun LinearDayCard(
     val hourLabelPaint = remember {
         Paint().apply {
             textAlign = Paint.Align.CENTER
-            textSize = 36f
+            textSize = 54f
             isAntiAlias = true
             typeface = Typeface.DEFAULT_BOLD
         }
@@ -524,7 +524,7 @@ fun WeatherInfoCard(modifier: Modifier = Modifier, data: WeatherData) {
                 // Visar riktig data
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "Väderinformation",
+                        data.locationName,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
