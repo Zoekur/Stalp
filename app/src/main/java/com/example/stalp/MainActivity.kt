@@ -164,18 +164,15 @@ fun LinearClockScreen(onSettingsClick: () -> Unit) {
                 permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
             } else {
                 // Permission already granted, ensure we update coordinates
-                // We use a separate LaunchedEffect for this side effect if permissions are already granted
-                LaunchedEffect(Unit) {
-                    try {
-                        val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
-                        val location = locationManager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
-                            ?: locationManager.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
-                        location?.let {
-                            weatherRepository.saveCurrentLocationCoordinates(it.latitude, it.longitude)
-                        }
-                    } catch (e: SecurityException) {
-                        e.printStackTrace()
+                try {
+                    val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+                    val location = locationManager.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+                        ?: locationManager.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                    location?.let {
+                        weatherRepository.saveCurrentLocationCoordinates(it.latitude, it.longitude)
                     }
+                } catch (e: SecurityException) {
+                    e.printStackTrace()
                 }
             }
         }

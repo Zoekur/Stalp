@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<AppWidgetProviderInfo xmlns:android="http://schemas.android.com/apk/res/android"
-    android:autoAdvanceViewId="@+id/auto_advance"
-    android:configure="com.example.stalp.widget.LinearClockConfigActivity"
-    android:description="@string/widget_name"
-    android:initialLayout="@layout/widget_placeholder"
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
     android:minHeight="72dp"
-    android:previewImage="@drawable/ic_launcher_foreground"
-    android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="0"
-    android:widgetCategory="home_screen" />
+    android:previewImage="@drawable/after"
+    android:initialLayout="@layout/widget_placeholder"
+    android:configure="com.example.stalp.widget.LinearClockConfigActivity"
+    android:description="@string/widget_description"
+    android:widgetCategory="home_screen"
+    android:resizeMode="horizontal|vertical"
+    android:label="@string/widget_name" />
