@@ -31,11 +31,13 @@ class WeatherWorker(
             // Mock weather fetching logic
             val temp: Int
             val precipChance: Int
+            val locationName: String
 
             if (settings.useCurrentLocation) {
                 // Simulating GPS location weather (random but consistent for "local")
                 temp = (-5..25).random()
                 precipChance = (0..50).random()
+                locationName = "Din Plats"
             } else {
                  // Simulating Manual location weather
                  if (settings.manualLocationName.isNotBlank()) {
@@ -43,13 +45,15 @@ class WeatherWorker(
                      val seed = settings.manualLocationName.length
                      temp = (seed % 30)
                      precipChance = (seed * 10 % 100)
+                     locationName = settings.manualLocationName
                  } else {
                      temp = 20
                      precipChance = 0
+                     locationName = "Väderinformation" // Fallback
                  }
             }
             
-            repository.saveWeatherData(temp, precipChance)
+            repository.saveWeatherData(temp, precipChance, locationName)
 
             // Update all widgets
             val manager = GlanceAppWidgetManager(context)

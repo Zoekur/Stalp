@@ -21,6 +21,9 @@ object WeatherPreferencesKeys {
     val CLOTHING_TYPE = stringPreferencesKey("clothing_type") // Sparar typ av kläder som sträng
     val DATA_LOADED = booleanPreferencesKey("data_loaded")
 
+    // Sparad platsnamn att visa (t.ex. "Stockholm" eller "Din Plats")
+    val LOCATION_NAME_DISPLAY = stringPreferencesKey("location_name_display")
+
     // New Location Settings
     val USE_CURRENT_LOCATION = booleanPreferencesKey("use_current_location")
     val MANUAL_LOCATION_NAME = stringPreferencesKey("manual_location_name")
@@ -33,6 +36,7 @@ data class WeatherData(
     val adviceIcon: String = "☁️",
     val adviceText: String = "Laddar väderdata...",
     val clothingType: String = "NORMAL",
+    val locationName: String = "Väderinformation", // Default
     val isDataLoaded: Boolean = false
 ) {
     fun getClothingResourceId(): Int {
@@ -75,6 +79,7 @@ class WeatherRepository(private val context: Context) {
                 adviceIcon = prefs[WeatherPreferencesKeys.IS_COLD_ADVICE] ?: "☁️",
                 adviceText = prefs[WeatherPreferencesKeys.ADVICE_TEXT] ?: "Väntar på data...",
                 clothingType = prefs[WeatherPreferencesKeys.CLOTHING_TYPE] ?: "NORMAL",
+                locationName = prefs[WeatherPreferencesKeys.LOCATION_NAME_DISPLAY] ?: "Väderinformation",
                 isDataLoaded = prefs[WeatherPreferencesKeys.DATA_LOADED] ?: false
             )
         }
@@ -89,7 +94,7 @@ class WeatherRepository(private val context: Context) {
         }
 
     // Skriver ny väderdata till DataStore
-    suspend fun saveWeatherData(temp: Int, precipChance: Int) {
+    suspend fun saveWeatherData(temp: Int, precipChance: Int, locationName: String) {
         val (adviceText, adviceIcon, clothingType) = generateClothingAdvice(temp, precipChance)
 
         dataStore.edit { prefs ->
@@ -98,6 +103,7 @@ class WeatherRepository(private val context: Context) {
             prefs[WeatherPreferencesKeys.ADVICE_TEXT] = adviceText
             prefs[WeatherPreferencesKeys.IS_COLD_ADVICE] = adviceIcon
             prefs[WeatherPreferencesKeys.CLOTHING_TYPE] = clothingType
+            prefs[WeatherPreferencesKeys.LOCATION_NAME_DISPLAY] = locationName
             prefs[WeatherPreferencesKeys.DATA_LOADED] = true
         }
     }
