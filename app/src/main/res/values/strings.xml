@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Stalp</string>
-    <string name="widget_name">Linjär Klocka</string>
+    <string name="app_name" translatable="false">Stalp</string>
+    <string name="widget_name" translatable="false">Stalp</string>
 </resources>
