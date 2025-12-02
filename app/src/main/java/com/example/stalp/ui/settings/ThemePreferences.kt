@@ -13,21 +13,21 @@ import kotlinx.coroutines.flow.map
 val Context.themeDataStore: DataStore<Preferences> by preferencesDataStore(name = "theme_preferences")
 
 class ThemePreferences(context: Context) {
-    private val appContext = context.applicationContext
+	private val appContext = context.applicationContext
 
-    companion object {
-        private val THEME_OPTION_KEY = stringPreferencesKey("theme_option")
-    }
+	companion object {
+		private val THEME_OPTION_KEY = stringPreferencesKey("theme_option")
+	}
 
-    fun themeOptionFlow(): Flow<ThemeOption> = appContext.themeDataStore.data
-        .map { prefs ->
-            val savedValue = prefs[THEME_OPTION_KEY]
-            ThemeOption.values().firstOrNull { it.name == savedValue } ?: ThemeOption.NordicCalm
-        }
+	fun themeOptionFlow(): Flow<ThemeOption> = appContext.themeDataStore.data
+		.map { prefs ->
+			val savedValue = prefs[THEME_OPTION_KEY]
+			ThemeOption.values().firstOrNull { it.name == savedValue } ?: ThemeOption.NordicCalm
+		}
 
-    suspend fun setThemeOption(option: ThemeOption) {
-        appContext.themeDataStore.edit { prefs ->
-            prefs[THEME_OPTION_KEY] = option.name
-        }
-    }
+	suspend fun setThemeOption(option: ThemeOption) {
+		appContext.themeDataStore.edit { prefs ->
+			prefs[THEME_OPTION_KEY] = option.name
+		}
+	}
 }

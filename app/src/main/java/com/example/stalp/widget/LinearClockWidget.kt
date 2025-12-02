@@ -4,15 +4,20 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
-import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -25,158 +30,156 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.width
-import androidx.glance.Image
-import androidx.glance.ImageProvider
-import androidx.glance.LocalContext
-import androidx.glance.LocalSize
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.TextUnitType
 import com.example.stalp.data.CalendarRepository
-import com.example.stalp.data.WeatherRepository
 import com.example.stalp.data.DayEvent
+import com.example.stalp.data.WeatherRepository
 import java.time.LocalTime
 
 object LinearClockWidget : GlanceAppWidget() {
 
-    override val stateDefinition = PreferencesGlanceStateDefinition
+	override val stateDefinition = PreferencesGlanceStateDefinition
 
-    override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val weatherRepo = WeatherRepository(context)
-        val calendarRepo = CalendarRepository(context)
+	override suspend fun provideGlance(context: Context, id: GlanceId) {
+		val weatherRepo = WeatherRepository(context)
+		val calendarRepo = CalendarRepository(context)
 
-        // Hämta event (detta sker vid uppdatering)
-        val events = calendarRepo.getEventsForToday()
+		// Hämta event (detta sker vid uppdatering)
+		val events = calendarRepo.getEventsForToday()
 
-        provideContent {
-            val weatherData by weatherRepo.weatherDataFlow.collectAsState(initial = null)
-            LinearClockWidgetContent(weatherData, events)
-        }
-    }
+		provideContent {
+			val weatherData by weatherRepo.weatherDataFlow.collectAsState(initial = null)
+			LinearClockWidgetContent(weatherData, events)
+		}
+	}
 }
 
 @Composable
 private fun LinearClockWidgetContent(
-    weatherData: com.example.stalp.data.WeatherData?,
-    events: List<DayEvent>
+	weatherData: com.example.stalp.data.WeatherData?,
+	events: List<DayEvent>
 ) {
-    val context = LocalContext.current
-    val size = LocalSize.current
-    val colorBorder = ColorProvider(0xFF000000.toInt())
+	val context = LocalContext.current
+	val size = LocalSize.current
+	val colorBorder = ColorProvider(0xFF000000.toInt())
 
-    // Enkel logik för px-beräkning (kan behöva justeras för exakt precision)
-    val density = context.resources.displayMetrics.density
-    val widthPx = (size.width.value * density).toInt().coerceAtLeast(300)
-    val heightPx = (80 * density).toInt().coerceAtLeast(100)
+	// Enkel logik för px-beräkning (kan behöva justeras för exakt precision)
+	val density = context.resources.displayMetrics.density
+	val widthPx = (size.width.value * density).toInt().coerceAtLeast(300)
+	val heightPx = (80 * density).toInt().coerceAtLeast(100)
 
-    Column(
-        GlanceModifier
-            .fillMaxSize()
-            .background(ColorProvider(0xFFFFFFFF.toInt()))
-            .padding(8.dp)
-            .clickable(actionStartActivity<LinearClockConfigActivity>())
-    ) {
+	Column(
+		GlanceModifier
+			.fillMaxSize()
+			.background(ColorProvider(0xFFFFFFFF.toInt()))
+			.padding(8.dp)
+			.clickable(actionStartActivity<LinearClockConfigActivity>())
+	) {
 
-        // 1. TOP SECTION: Klockan
-        Box(
-            GlanceModifier
-                .fillMaxWidth()
-                .height(80.dp)
-                .background(colorBorder)
-                .padding(2.dp)
-        ) {
-            // OBS: Se till att LinearClockBitmapGenerator finns!
-            val bitmap = LinearClockBitmapGenerator.generate(
-                context = context,
-                width = widthPx,
-                height = heightPx,
-                events = events,
-                currentTime = LocalTime.now()
-            )
+		// 1. TOP SECTION: Klockan
+		Box(
+			GlanceModifier
+				.fillMaxWidth()
+				.height(80.dp)
+				.background(colorBorder)
+				.padding(2.dp)
+		) {
+			// OBS: Se till att LinearClockBitmapGenerator finns!
+			val bitmap = LinearClockBitmapGenerator.generate(
+				context = context,
+				width = widthPx,
+				height = heightPx,
+				events = events,
+				currentTime = LocalTime.now()
+			)
 
-            Image(
-                provider = ImageProvider(bitmap),
-                contentDescription = "Linear Clock",
-                modifier = GlanceModifier.fillMaxSize()
-            )
-        }
+			Image(
+				provider = ImageProvider(bitmap),
+				contentDescription = "Linear Clock",
+				modifier = GlanceModifier.fillMaxSize()
+			)
+		}
 
-        Spacer(GlanceModifier.height(8.dp))
+		Spacer(GlanceModifier.height(8.dp))
 
-        // 2. BOTTOM SECTION
-        Row(GlanceModifier.fillMaxWidth().height(120.dp)) {
+		// 2. BOTTOM SECTION
+		Row(GlanceModifier.fillMaxWidth().height(120.dp)) {
 
-            // 2.1 Weather Box
-            Box(
-                GlanceModifier
-                    .defaultWeight() // RÄTTAT: Inga argument här!
-                    .fillMaxHeight()
-                    .background(ColorProvider(0xFFFFFFFF.toInt()))
-                    .cornerRadius(16.dp)
-                    .padding(2.dp)
-                    .background(colorBorder)
-            ) {
-                Column(
-                    GlanceModifier
-                        .fillMaxSize()
-                        .padding(2.dp)
-                        .background(ColorProvider(0xFFFFFFFF.toInt()))
-                        .padding(8.dp),
-                    horizontalAlignment = Alignment.Start,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (weatherData != null && weatherData.isDataLoaded) {
-                        Text(
-                            text = "${weatherData.temperatureCelsius}°C",
-                            style = TextStyle(fontSize = TextUnit(24.dp.value, TextUnitType.Sp), fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(GlanceModifier.height(4.dp))
-                        Text(
-                            text = weatherData.adviceText,
-                            style = TextStyle(fontSize = TextUnit(12.dp.value, TextUnitType.Sp)),
-                            maxLines = 4
-                        )
-                    } else {
-                        Text("Laddar...")
-                    }
-                }
-            }
+			// 2.1 Weather Box
+			Box(
+				GlanceModifier
+					.defaultWeight() // RÄTTAT: Inga argument här!
+					.fillMaxHeight()
+					.background(ColorProvider(0xFFFFFFFF.toInt()))
+					.cornerRadius(16.dp)
+					.padding(2.dp)
+					.background(colorBorder)
+			) {
+				Column(
+					GlanceModifier
+						.fillMaxSize()
+						.padding(2.dp)
+						.background(ColorProvider(0xFFFFFFFF.toInt()))
+						.padding(8.dp),
+					horizontalAlignment = Alignment.Start,
+					verticalAlignment = Alignment.CenterVertically
+				) {
+					if (weatherData != null && weatherData.isDataLoaded) {
+						Text(
+							text = "${weatherData.temperatureCelsius}°C",
+							style = TextStyle(
+								fontSize = TextUnit(24.dp.value, TextUnitType.Sp),
+								fontWeight = FontWeight.Bold
+							)
+						)
+						Spacer(GlanceModifier.height(4.dp))
+						Text(
+							text = weatherData.adviceText,
+							style = TextStyle(fontSize = TextUnit(12.dp.value, TextUnitType.Sp)),
+							maxLines = 4
+						)
+					} else {
+						Text("Laddar...")
+					}
+				}
+			}
 
-            Spacer(GlanceModifier.width(8.dp))
+			Spacer(GlanceModifier.width(8.dp))
 
-            // 2.2 Clothing Box
-            Box(
-                GlanceModifier
-                    .defaultWeight() // RÄTTAT: Inga argument här!
-                    .fillMaxHeight()
-                    .background(ColorProvider(0xFFFFFFFF.toInt()))
-                    .cornerRadius(16.dp)
-                    .padding(2.dp)
-                    .background(colorBorder)
-            ) {
-                Column(
-                    GlanceModifier
-                        .fillMaxSize()
-                        .padding(2.dp)
-                        .background(ColorProvider(0xFFFFFFFF.toInt()))
-                        .padding(8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (weatherData != null && weatherData.isDataLoaded) {
-                        Image(
-                            provider = ImageProvider(weatherData.getClothingResourceId()),
-                            contentDescription = "Clothing advice",
-                            modifier = GlanceModifier.fillMaxSize()
-                        )
-                    } else {
-                        Text("...")
-                    }
-                }
-            }
-        }
-    }
+			// 2.2 Clothing Box
+			Box(
+				GlanceModifier
+					.defaultWeight() // RÄTTAT: Inga argument här!
+					.fillMaxHeight()
+					.background(ColorProvider(0xFFFFFFFF.toInt()))
+					.cornerRadius(16.dp)
+					.padding(2.dp)
+					.background(colorBorder)
+			) {
+				Column(
+					GlanceModifier
+						.fillMaxSize()
+						.padding(2.dp)
+						.background(ColorProvider(0xFFFFFFFF.toInt()))
+						.padding(8.dp),
+					horizontalAlignment = Alignment.CenterHorizontally,
+					verticalAlignment = Alignment.CenterVertically
+				) {
+					if (weatherData != null && weatherData.isDataLoaded) {
+						Image(
+							provider = ImageProvider(weatherData.getClothingResourceId()),
+							contentDescription = "Clothing advice",
+							modifier = GlanceModifier.fillMaxSize()
+						)
+					} else {
+						Text("...")
+					}
+				}
+			}
+		}
+	}
 }
