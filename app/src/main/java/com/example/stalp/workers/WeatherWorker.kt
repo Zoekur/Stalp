@@ -72,20 +72,26 @@ class WeatherWorker(
     }
 
     companion object {
-        private const val UNIQUE_WORK_NAME = "weather_worker_periodic"
+        private const val UNIQUE_WORK_NAME = "WeatherWorker"
 
         fun schedule(context: Context) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
-            val workRequest = PeriodicWorkRequestBuilder<WeatherWorker>(30, TimeUnit.MINUTES)
+            // Enforce the minimum periodic interval to prevent crashes
+            val repeatInterval = maxOf(30.toLong(), PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MINUTES)
+
+            val workRequest = PeriodicWorkRequestBuilder<WeatherWorker>(repeatInterval, TimeUnit.MINUTES)
                 .setConstraints(constraints)
+                // Add an initial delay to improve system health
+                .setInitialDelay(10, TimeUnit.SECONDS)
                 .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 UNIQUE_WORK_NAME,
-                ExistingPeriodicWorkPolicy.UPDATE,
+                // Use KEEP to avoid rescheduling if the work already exists and is unchanged
+                ExistingPeriodicWorkPolicy.KEEP,
                 workRequest
             )
         }
