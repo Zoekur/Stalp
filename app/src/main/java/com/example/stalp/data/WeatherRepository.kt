@@ -7,6 +7,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
@@ -21,6 +22,7 @@ object WeatherPreferencesKeys {
     val CLOTHING_TYPE = stringPreferencesKey("clothing_type") // Vi använder denna för att välja bild!
     val DATA_LOADED = booleanPreferencesKey("data_loaded")
     val LOCATION_NAME_DISPLAY = stringPreferencesKey("location_name_display")
+    val PROVIDER = stringPreferencesKey("provider")
 
     val USE_CURRENT_LOCATION = booleanPreferencesKey("use_current_location")
     val MANUAL_LOCATION_NAME = stringPreferencesKey("manual_location_name")
@@ -88,6 +90,12 @@ class WeatherRepository(private val context: Context) {
             )
         }
 
+    val providerFlow: Flow<WeatherProvider> = dataStore.data
+        .map { prefs ->
+            WeatherProvider.fromStorageValue(prefs[WeatherPreferencesKeys.PROVIDER])
+        }
+        .onStart { emit(WeatherProvider.DEFAULT) }
+
     suspend fun saveWeatherData(temp: Int, precipChance: Int, locationName: String) {
         val (adviceText, clothingType) = generateClothingAdvice(temp, precipChance)
         dataStore.edit { prefs ->
@@ -108,6 +116,12 @@ class WeatherRepository(private val context: Context) {
                 prefs[WeatherPreferencesKeys.MANUAL_LAT] = lat
                 prefs[WeatherPreferencesKeys.MANUAL_LON] = lon
             }
+        }
+    }
+
+    suspend fun saveProvider(provider: WeatherProvider) {
+        dataStore.edit { prefs ->
+            prefs[WeatherPreferencesKeys.PROVIDER] = provider.storageValue
         }
     }
 
