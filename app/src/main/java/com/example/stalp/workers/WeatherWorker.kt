@@ -71,9 +71,14 @@ class RefreshWeatherWorker(appContext: Context, workerParams: WorkerParameters) 
         val url = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,precipitation&timezone=auto"
         val response = URL(url).readText()
         val json = JSONObject(response)
+        if (!json.has("current")) {
+            return Triple(0, 0, locationName)
+        }
         val current = json.getJSONObject("current")
-        val temp = current.getDouble("temperature_2m").toInt()
-        val precip = current.getDouble("precipitation").toInt() * 10 // Mock conversion to % chance if value is mm, strictly speaking this is wrong but suffices for visual "risk"
+        val temp = if (current.has("temperature_2m")) current.getDouble("temperature_2m").toInt() else 0
+        val precipVal = if (current.has("precipitation")) current.getDouble("precipitation") else 0.0
+        val precip = (precipVal * 10).toInt()
+
         // OpenMeteo gives precipitation in mm. Stalp expects %.
         // Let's check 'daily.precipitation_probability_max'.
         // To keep it simple and match "current" endpoint: if precip > 0, we say high chance.
