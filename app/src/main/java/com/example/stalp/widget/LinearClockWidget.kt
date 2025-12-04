@@ -70,7 +70,7 @@ private fun LinearClockWidgetContent(
 	// Enkel logik för px-beräkning (kan behöva justeras för exakt precision)
 	val density = context.resources.displayMetrics.density
 	val widthPx = (size.width.value * density).toInt().coerceAtLeast(300)
-	val heightPx = (80 * density).toInt().coerceAtLeast(100)
+	val heightPx = (size.height.value * density).toInt().coerceAtLeast(100)
 
 	Column(
 		GlanceModifier
@@ -83,8 +83,7 @@ private fun LinearClockWidgetContent(
 		// 1. TOP SECTION: Klockan
 		Box(
 			GlanceModifier
-				.fillMaxWidth()
-				.height(80.dp)
+				.fillMaxSize()
 				.background(colorBorder)
 				.padding(2.dp)
 		) {
@@ -102,84 +101,6 @@ private fun LinearClockWidgetContent(
 				contentDescription = "Linear Clock",
 				modifier = GlanceModifier.fillMaxSize()
 			)
-		}
-
-		Spacer(GlanceModifier.height(8.dp))
-
-		// 2. BOTTOM SECTION
-		Row(GlanceModifier.fillMaxWidth().height(120.dp)) {
-
-			// 2.1 Weather Box
-			Box(
-				GlanceModifier
-					.defaultWeight() // RÄTTAT: Inga argument här!
-					.fillMaxHeight()
-					.background(ColorProvider(0xFFFFFFFF.toInt()))
-					.cornerRadius(16.dp)
-					.padding(2.dp)
-					.background(colorBorder)
-			) {
-				Column(
-					GlanceModifier
-						.fillMaxSize()
-						.padding(2.dp)
-						.background(ColorProvider(0xFFFFFFFF.toInt()))
-						.padding(8.dp),
-					horizontalAlignment = Alignment.Start,
-					verticalAlignment = Alignment.CenterVertically
-				) {
-					if (weatherData != null && weatherData.isDataLoaded) {
-						Text(
-							text = "${weatherData.temperatureCelsius}°C",
-							style = TextStyle(
-								fontSize = TextUnit(24.dp.value, TextUnitType.Sp),
-								fontWeight = FontWeight.Bold
-							)
-						)
-						Spacer(GlanceModifier.height(4.dp))
-						Text(
-							text = weatherData.adviceText,
-							style = TextStyle(fontSize = TextUnit(12.dp.value, TextUnitType.Sp)),
-							maxLines = 4
-						)
-					} else {
-						Text("Laddar...")
-					}
-				}
-			}
-
-			Spacer(GlanceModifier.width(8.dp))
-
-			// 2.2 Clothing Box
-			Box(
-				GlanceModifier
-					.defaultWeight() // RÄTTAT: Inga argument här!
-					.fillMaxHeight()
-					.background(ColorProvider(0xFFFFFFFF.toInt()))
-					.cornerRadius(16.dp)
-					.padding(2.dp)
-					.background(colorBorder)
-			) {
-				Column(
-					GlanceModifier
-						.fillMaxSize()
-						.padding(2.dp)
-						.background(ColorProvider(0xFFFFFFFF.toInt()))
-						.padding(8.dp),
-					horizontalAlignment = Alignment.CenterHorizontally,
-					verticalAlignment = Alignment.CenterVertically
-				) {
-					if (weatherData != null && weatherData.isDataLoaded) {
-						Image(
-							provider = ImageProvider(weatherData.getClothingResourceId()),
-							contentDescription = "Clothing advice",
-							modifier = GlanceModifier.fillMaxSize()
-						)
-					} else {
-						Text("...")
-					}
-				}
-			}
 		}
 	}
 }
