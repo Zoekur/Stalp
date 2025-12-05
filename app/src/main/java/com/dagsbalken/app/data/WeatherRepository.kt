@@ -11,6 +11,13 @@ enum class WeatherProvider(val displayName: String) {
     SIMULATED("Simulerad")
 }
 
+data class WeatherLocationSettings(
+    val useCurrentLocation: Boolean = true,
+    val manualLocationName: String = "",
+    val manualLat: Double = 0.0,
+    val manualLon: Double = 0.0
+)
+
 data class WeatherData(
     val temperatureCelsius: Int = 0,
     val precipitationChance: Int = 0,
@@ -45,5 +52,35 @@ class WeatherRepository(private val context: Context) {
         )
     }
 
-    // ... (rest of the class)
+    val locationSettingsFlow: Flow<WeatherLocationSettings> = context.dataStore.data.map { p ->
+        WeatherLocationSettings(
+            useCurrentLocation = p[WeatherPreferencesKeys.USE_CURRENT_LOCATION] ?: true,
+            manualLocationName = p[WeatherPreferencesKeys.MANUAL_LOCATION_NAME] ?: "",
+            manualLat = p[WeatherPreferencesKeys.MANUAL_LAT] ?: 0.0,
+            manualLon = p[WeatherPreferencesKeys.MANUAL_LON] ?: 0.0
+        )
+    }
+
+    suspend fun saveLocationSettings(useCurrent: Boolean, manualLocation: String) {
+        context.dataStore.edit {
+            it[WeatherPreferencesKeys.USE_CURRENT_LOCATION] = useCurrent
+            it[WeatherPreferencesKeys.MANUAL_LOCATION_NAME] = manualLocation
+        }
+    }
+
+    suspend fun saveCurrentLocationCoordinates(lat: Double, lon: Double) {
+        context.dataStore.edit {
+            it[WeatherPreferencesKeys.SAVED_LAT] = lat
+            it[WeatherPreferencesKeys.SAVED_LON] = lon
+        }
+    }
+
+    suspend fun saveWeatherData(temp: Int, precip: Int, locationName: String) {
+        context.dataStore.edit {
+            it[WeatherPreferencesKeys.TEMPERATURE] = temp
+            it[WeatherPreferencesKeys.PRECIPITATION] = precip
+            it[WeatherPreferencesKeys.LOCATION_NAME] = locationName
+            it[WeatherPreferencesKeys.IS_LOADED] = true
+        }
+    }
 }
