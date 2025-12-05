@@ -1,20 +1,17 @@
 pluginManagement {
-	repositories {
-		google()
-		mavenCentral()
-		gradlePluginPortal()
-	}
-}
-plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
 }
 dependencyResolutionManagement {
-	repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-	repositories {
-		google()
-		mavenCentral()
-	}
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
 }
 
-rootProject.name = "Stalp"
+rootProject.name = "Dagsbalken"
 include(":app")

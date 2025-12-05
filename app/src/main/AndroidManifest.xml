@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.stalp">
+    package="com.dagsbalken.app">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
@@ -12,9 +12,9 @@
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="Stalp"
+        android:label="Dagsbalken"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Stalp">
+        android:theme="@style/Theme.Dagsbalken">
 
         <activity
             android:name=".MainActivity"
@@ -39,7 +39,7 @@
         <activity
             android:name=".widget.LinearClockConfigActivity"
             android:exported="true"
-            android:theme="@style/Theme.Stalp" />
+            android:theme="@style/Theme.Dagsbalken" />
 
         <receiver
             android:name=".widget.BootCompletedReceiver"

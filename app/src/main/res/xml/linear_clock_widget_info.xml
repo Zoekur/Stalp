@@ -5,7 +5,7 @@
     android:updatePeriodMillis="0"
     android:previewImage="@drawable/after"
     android:initialLayout="@layout/widget_placeholder"
-    android:configure="com.example.stalp.widget.LinearClockConfigActivity"
+    android:configure="com.dagsbalken.app.widget.LinearClockConfigActivity"
     android:description="@string/widget_description"
     android:widgetCategory="home_screen"
     android:resizeMode="horizontal|vertical"
